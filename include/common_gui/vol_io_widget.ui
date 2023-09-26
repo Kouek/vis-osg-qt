@@ -24,6 +24,12 @@
        <property name="enabled">
         <bool>true</bool>
        </property>
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
        <property name="title">
         <string>热力图</string>
        </property>
@@ -92,10 +98,83 @@
       </widget>
      </item>
      <item>
-      <widget class="QGroupBox" name="groupBox_ColorMap">
+      <widget class="QGroupBox" name="groupBox_TF">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
        <property name="title">
         <string>传输函数</string>
        </property>
+       <layout class="QVBoxLayout" name="verticalLayout_12">
+        <item>
+         <layout class="QVBoxLayout" name="verticalLayout_11">
+          <item>
+           <widget class="QGroupBox" name="groupBox_7">
+            <property name="title">
+             <string>传输函数来源</string>
+            </property>
+            <layout class="QHBoxLayout" name="horizontalLayout_11" stretch="2">
+             <item>
+              <widget class="QComboBox" name="comboBox_TFSrc">
+               <item>
+                <property name="text">
+                 <string>无</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>文件读入/自定义</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>蓝红渐变</string>
+                </property>
+               </item>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QGroupBox" name="groupBox_8">
+          <property name="title">
+           <string>当前关键点</string>
+          </property>
+          <layout class="QHBoxLayout" name="horizontalLayout_10" stretch="2,1">
+           <item>
+            <widget class="QLabel" name="label_TFPointPicked">
+             <property name="text">
+              <string>-- -&gt; --</string>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignCenter</set>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="pushButton_TFPointColored">
+             <property name="text">
+              <string>调色</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="label_5">
+          <property name="text">
+           <string>使用 Ctrl+鼠标左键单击，添加关键点</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
       </widget>
      </item>
     </layout>
@@ -354,13 +433,26 @@
        <layout class="QHBoxLayout" name="horizontalLayout_5">
         <item>
          <widget class="QPushButton" name="pushButton_ExportVolume">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
           <property name="text">
-           <string>导出体数据</string>
+           <string>导出RAW格式
+体数据（uint8）</string>
           </property>
          </widget>
         </item>
         <item>
          <widget class="QPushButton" name="pushButton_ExportTF">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
           <property name="text">
            <string>导出传输函数</string>
           </property>
