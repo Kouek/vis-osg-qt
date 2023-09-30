@@ -1,9 +1,12 @@
-#ifndef SCIVIS_IO_VOL_LOADER_H
-#define SCIVIS_IO_VOL_LOADER_H
+#ifndef SCIVIS_IO_VOL_IO_H
+#define SCIVIS_IO_VOL_IO_H
 
 #include <fstream>
+#include <limits>
+
 #include <array>
 #include <vector>
+#include <unordered_set>
 
 namespace SciVis
 {
@@ -12,7 +15,7 @@ namespace SciVis
 		class RAWVolume
 		{
 		public:
-			static std::vector<uint8_t> LoadFromFile(
+			static std::vector<uint8_t> LoadU8FromFile(
 				const std::string& filePath, const std::array<uint32_t, 3>& dim,
 				std::string* errMsg = nullptr)
 			{
@@ -60,6 +63,113 @@ namespace SciVis
 				return true;
 			}
 		};
+
+		class TXTVolume
+		{
+		public:
+			static std::vector<float> LoadFromFile(
+				const std::string& filePath, const std::array<uint32_t, 3>& dim,
+				float nullVal, std::string* errMsg = nullptr)
+			{
+			}
+		};
+
+		class LabeledTXTVolume
+		{
+		public:
+			bool isDense;
+			std::array<uint32_t, 3> dim;
+			std::array<float, 2> valRng;
+			std::array<float, 2> lonRng;
+			std::array<float, 2> latRng;
+			std::array<float, 2> hRng;
+			std::vector<float> dat;
+
+			void Normalize(const std::array<float, 2>* valRng = nullptr)
+			{
+				if (valRng && valRng[1] > valRng[0])
+					this->valRng = *valRng;
+
+				auto rngWid = this->valRng[1] - this->valRng[0];
+				for (auto itr = dat.begin(); itr != dat.end(); ++itr) {
+					if (isnan(*itr))
+						*itr = this->valRng[0];
+					else
+					{
+						*itr = (*itr - this->valRng[0]) / rngWid;
+						if (*itr < 0.f)
+							*itr = 0.f;
+					}
+				}
+
+				this->valRng[0] = 0.f;
+				this->valRng[1] = 1.f;
+			}
+
+		public:
+			static LabeledTXTVolume LoadFromFile(
+				const std::string& filePath, std::string* errMsg = nullptr)
+			{
+				LabeledTXTVolume ret;
+
+				std::ifstream is(filePath, std::ios::in);
+				if (!is.is_open()) {
+					if (errMsg)
+						*errMsg = "Invalid File Path";
+					return ret;
+				}
+
+				auto computeMinMax = [](std::array<float, 2>& rng, float val) {
+					if (rng[0] > val)
+						rng[0] = val;
+					if (rng[1] < val)
+						rng[1] = val;
+				};
+
+				std::unordered_set<float> hSets, latSets, lonSets;
+				std::string buf;
+				std::getline(is, buf); // 跳过第一行
+				while (std::getline(is, buf)) {
+					std::array<float, 5> f5;
+
+					auto validRead = sscanf(buf.c_str(), "%f%f%f%f%f",
+						&f5[0], &f5[1], &f5[2], &f5[3], &f5[4]);
+					if (validRead < 4) continue;
+
+					hSets.emplace(f5[1]);
+					latSets.emplace(f5[2]);
+					lonSets.emplace(f5[3]);
+
+					computeMinMax(ret.hRng, f5[1]);
+					computeMinMax(ret.latRng, f5[2]);
+					computeMinMax(ret.lonRng, f5[3]);
+					if (validRead == 5)
+						computeMinMax(ret.valRng, f5[4]);
+					else
+						f5[4] = std::numeric_limits<float>::quiet_NaN();
+
+					ret.dat.emplace_back(f5[4]);
+				}
+
+				ret.dim[2] = hSets.size();
+				ret.dim[1] = latSets.size();
+				ret.dim[0] = lonSets.size();
+				ret.isDense = ret.dat.size() ==
+					static_cast<size_t>(ret.dim[2]) * ret.dim[1] * ret.dim[0];
+
+				return ret;
+			}
+
+		private:
+			LabeledTXTVolume()
+			{
+				dim[0] = dim[1] = dim[2] = 0;
+				valRng[0] = lonRng[0] = latRng[0] = hRng[0]
+					= std::numeric_limits <float>::max();
+				valRng[1] = lonRng[1] = latRng[1] = hRng[1]
+					= std::numeric_limits <float>::min();
+			}
+		};
 	}
 
 	namespace Convertor
@@ -67,7 +177,7 @@ namespace SciVis
 		class RAWVolume
 		{
 		public:
-			static std::vector<float> U8ToFloat(const std::vector<uint8_t>& u8Dat)
+			static std::vector<float> U8ToNormalizedFloat(const std::vector<uint8_t>& u8Dat)
 			{
 				std::vector<float> dat(u8Dat.size());
 				size_t i = 0;
@@ -76,7 +186,7 @@ namespace SciVis
 				return dat;
 			}
 
-			static std::vector<uint8_t> FloatToU8(const std::vector<float>& fDat)
+			static std::vector<uint8_t> NormalizedFloatToU8(const std::vector<float>& fDat)
 			{
 				std::vector<uint8_t> dat(fDat.size());
 				size_t i = 0;
@@ -88,4 +198,4 @@ namespace SciVis
 	}
 }
 
-#endif // !SCIVIS_IO_VOL_LOADER_H
+#endif // !SCIVIS_IO_VOL_IO_H

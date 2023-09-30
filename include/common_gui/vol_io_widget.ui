@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>800</width>
-    <height>600</height>
+    <height>648</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -47,52 +47,80 @@
           </property>
          </widget>
         </item>
-       </layout>
-      </widget>
-     </item>
-     <item>
-      <widget class="QGroupBox" name="groupBox_6">
-       <property name="title">
-        <string>当前Z</string>
-       </property>
-       <layout class="QVBoxLayout" name="verticalLayout_10">
         <item>
-         <widget class="QLabel" name="label_HeatMapZ">
-          <property name="text">
-           <string>0</string>
+         <widget class="QGroupBox" name="groupBox_6">
+          <property name="title">
+           <string>当前Z</string>
           </property>
-          <property name="alignment">
-           <set>Qt::AlignCenter</set>
-          </property>
+          <layout class="QVBoxLayout" name="verticalLayout_10">
+           <item>
+            <widget class="QLabel" name="label_HeatMapZ">
+             <property name="text">
+              <string>0</string>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignCenter</set>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="horizontalLayout_9">
+             <item>
+              <widget class="QLabel" name="label_MinZ">
+               <property name="text">
+                <string>--</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QSlider" name="horizontalSlider_HeatMapZ">
+               <property name="maximum">
+                <number>255</number>
+               </property>
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="label_MaxZ">
+               <property name="text">
+                <string>--</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+          </layout>
          </widget>
         </item>
         <item>
-         <layout class="QHBoxLayout" name="horizontalLayout_9">
-          <item>
-           <widget class="QLabel" name="label_MaxZ">
-            <property name="text">
-             <string>0</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QSlider" name="horizontalSlider_HeatMapZ">
-            <property name="maximum">
-             <number>255</number>
-            </property>
-            <property name="orientation">
-             <enum>Qt::Horizontal</enum>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="label_MinZ">
-            <property name="text">
-             <string>255</string>
-            </property>
-           </widget>
-          </item>
-         </layout>
+         <widget class="QGroupBox" name="groupBox_7">
+          <property name="title">
+           <string>传输函数来源</string>
+          </property>
+          <layout class="QHBoxLayout" name="horizontalLayout_11" stretch="2">
+           <item>
+            <widget class="QComboBox" name="comboBox_TFSrc">
+             <item>
+              <property name="text">
+               <string>无</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>文件读入/自定义</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>蓝红渐变</string>
+              </property>
+             </item>
+            </widget>
+           </item>
+          </layout>
+         </widget>
         </item>
        </layout>
       </widget>
@@ -110,69 +138,25 @@
        </property>
        <layout class="QVBoxLayout" name="verticalLayout_12">
         <item>
-         <layout class="QVBoxLayout" name="verticalLayout_11">
+         <layout class="QHBoxLayout" name="horizontalLayout_7" stretch="1,2">
           <item>
-           <widget class="QGroupBox" name="groupBox_7">
-            <property name="title">
-             <string>传输函数来源</string>
+           <widget class="QPushButton" name="pushButton_ImportTF">
+            <property name="text">
+             <string>导入</string>
             </property>
-            <layout class="QHBoxLayout" name="horizontalLayout_11" stretch="2">
-             <item>
-              <widget class="QComboBox" name="comboBox_TFSrc">
-               <item>
-                <property name="text">
-                 <string>无</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>文件读入/自定义</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>蓝红渐变</string>
-                </property>
-               </item>
-              </widget>
-             </item>
-            </layout>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="label_ImportedTF">
+            <property name="text">
+             <string/>
+            </property>
            </widget>
           </item>
          </layout>
         </item>
         <item>
-         <widget class="QGroupBox" name="groupBox_8">
-          <property name="title">
-           <string>当前关键点</string>
-          </property>
-          <layout class="QHBoxLayout" name="horizontalLayout_10" stretch="2,1">
-           <item>
-            <widget class="QLabel" name="label_TFPointPicked">
-             <property name="text">
-              <string>-- -&gt; --</string>
-             </property>
-             <property name="alignment">
-              <set>Qt::AlignCenter</set>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QPushButton" name="pushButton_TFPointColored">
-             <property name="text">
-              <string>调色</string>
-             </property>
-            </widget>
-           </item>
-          </layout>
-         </widget>
-        </item>
-        <item>
-         <widget class="QLabel" name="label_5">
-          <property name="text">
-           <string>使用 Ctrl+鼠标左键单击，添加关键点</string>
-          </property>
-         </widget>
+         <layout class="QVBoxLayout" name="verticalLayout_11"/>
         </item>
        </layout>
       </widget>
@@ -190,7 +174,7 @@
         <item>
          <widget class="QGroupBox" name="groupBox_5">
           <property name="title">
-           <string>无尺寸信息体数据</string>
+           <string>尺寸信息（可选）</string>
           </property>
           <layout class="QVBoxLayout" name="verticalLayout_9">
            <item>
@@ -199,6 +183,9 @@
               <widget class="QLabel" name="label_2">
                <property name="text">
                 <string>X尺寸</string>
+               </property>
+               <property name="alignment">
+                <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
                </property>
               </widget>
              </item>
@@ -220,6 +207,9 @@
                <property name="text">
                 <string>Y尺寸</string>
                </property>
+               <property name="alignment">
+                <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+               </property>
               </widget>
              </item>
              <item>
@@ -240,6 +230,9 @@
                <property name="text">
                 <string>Z尺寸</string>
                </property>
+               <property name="alignment">
+                <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+               </property>
               </widget>
              </item>
              <item>
@@ -257,101 +250,169 @@
              </item>
             </layout>
            </item>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <widget class="QGroupBox" name="groupBox_9">
+          <property name="title">
+           <string>归一化用数据范围（可选）</string>
+          </property>
+          <layout class="QHBoxLayout" name="horizontalLayout_16" stretch="0,1,2,1,2">
            <item>
-            <widget class="QGroupBox" name="groupBox">
-             <property name="sizePolicy">
-              <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-               <horstretch>0</horstretch>
-               <verstretch>0</verstretch>
-              </sizepolicy>
+            <widget class="QCheckBox" name="checkBox_UseValRngForNorm">
+             <property name="text">
+              <string>使用</string>
              </property>
-             <property name="title">
-              <string>RAW（uint8）格式体数据</string>
-             </property>
-             <layout class="QVBoxLayout" name="verticalLayout_4">
-              <item>
-               <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="1,2">
-                <item>
-                 <widget class="QPushButton" name="pushButton_ImportRAW">
-                  <property name="text">
-                   <string>导入</string>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QLabel" name="label_ImportRAW">
-                  <property name="text">
-                   <string/>
-                  </property>
-                 </widget>
-                </item>
-               </layout>
-              </item>
-             </layout>
             </widget>
            </item>
            <item>
-            <widget class="QGroupBox" name="groupBox_2">
-             <property name="sizePolicy">
-              <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-               <horstretch>0</horstretch>
-               <verstretch>0</verstretch>
-              </sizepolicy>
+            <widget class="QLabel" name="label_10">
+             <property name="text">
+              <string>最小值</string>
              </property>
-             <property name="title">
-              <string>TXT格式体数据</string>
+             <property name="alignment">
+              <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
              </property>
-             <layout class="QVBoxLayout" name="verticalLayout_5">
-              <item>
-               <layout class="QHBoxLayout" name="horizontalLayout_6" stretch="1,2">
-                <item>
-                 <widget class="QLabel" name="label">
-                  <property name="text">
-                   <string>无效值</string>
-                  </property>
-                  <property name="alignment">
-                   <set>Qt::AlignCenter</set>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QDoubleSpinBox" name="doubleSpinBox_NullVal">
-                  <property name="decimals">
-                   <number>4</number>
-                  </property>
-                  <property name="minimum">
-                   <double>-99999999.000000000000000</double>
-                  </property>
-                  <property name="maximum">
-                   <double>99999999.000000000000000</double>
-                  </property>
-                  <property name="value">
-                   <double>-9999.000000000000000</double>
-                  </property>
-                 </widget>
-                </item>
-               </layout>
-              </item>
-              <item>
-               <layout class="QHBoxLayout" name="horizontalLayout_3" stretch="1,2">
-                <item>
-                 <widget class="QPushButton" name="pushButton_ImportTXT">
-                  <property name="text">
-                   <string>导入</string>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QLabel" name="label_ImportTXT">
-                  <property name="text">
-                   <string/>
-                  </property>
-                 </widget>
-                </item>
-               </layout>
-              </item>
-             </layout>
             </widget>
+           </item>
+           <item>
+            <widget class="QDoubleSpinBox" name="doubleSpinBox_MinValForNorm">
+             <property name="enabled">
+              <bool>false</bool>
+             </property>
+             <property name="decimals">
+              <number>4</number>
+             </property>
+             <property name="minimum">
+              <double>-99999999.000000000000000</double>
+             </property>
+             <property name="maximum">
+              <double>99999999.000000000000000</double>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="label_9">
+             <property name="text">
+              <string>最大值</string>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QDoubleSpinBox" name="doubleSpinBox_MaxValForNorm">
+             <property name="enabled">
+              <bool>false</bool>
+             </property>
+             <property name="decimals">
+              <number>4</number>
+             </property>
+             <property name="minimum">
+              <double>-99999999.000000000000000</double>
+             </property>
+             <property name="maximum">
+              <double>99999999.000000000000000</double>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <widget class="QGroupBox" name="groupBox">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="title">
+           <string>RAW（uint8）格式体数据</string>
+          </property>
+          <layout class="QVBoxLayout" name="verticalLayout_4">
+           <item>
+            <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="1,2">
+             <item>
+              <widget class="QPushButton" name="pushButton_ImportRAW">
+               <property name="text">
+                <string>导入</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="label_ImportedRAW">
+               <property name="text">
+                <string/>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <widget class="QGroupBox" name="groupBox_2">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="title">
+           <string>TXT格式体数据</string>
+          </property>
+          <layout class="QVBoxLayout" name="verticalLayout_5">
+           <item>
+            <layout class="QHBoxLayout" name="horizontalLayout_6" stretch="1,2">
+             <item>
+              <widget class="QLabel" name="label">
+               <property name="text">
+                <string>无效值</string>
+               </property>
+               <property name="alignment">
+                <set>Qt::AlignCenter</set>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QDoubleSpinBox" name="doubleSpinBox_NullVal">
+               <property name="decimals">
+                <number>4</number>
+               </property>
+               <property name="minimum">
+                <double>-99999999.000000000000000</double>
+               </property>
+               <property name="maximum">
+                <double>99999999.000000000000000</double>
+               </property>
+               <property name="value">
+                <double>-9999.000000000000000</double>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="horizontalLayout_3" stretch="1,2">
+             <item>
+              <widget class="QPushButton" name="pushButton_ImportTXT">
+               <property name="text">
+                <string>导入</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="label_ImportedTXT">
+               <property name="text">
+                <string/>
+               </property>
+              </widget>
+             </item>
+            </layout>
            </item>
           </layout>
          </widget>
@@ -378,7 +439,7 @@
               </widget>
              </item>
              <item>
-              <widget class="QLabel" name="label_ImportLabeledTXT">
+              <widget class="QLabel" name="label_ImportedLabeledTXT">
                <property name="text">
                 <string/>
                </property>
@@ -390,7 +451,7 @@
          </widget>
         </item>
         <item>
-         <widget class="QGroupBox" name="groupBox_4">
+         <widget class="QGroupBox" name="groupBox_10">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
             <horstretch>0</horstretch>
@@ -398,28 +459,76 @@
            </sizepolicy>
           </property>
           <property name="title">
-           <string>传输函数</string>
+           <string>读入信息</string>
           </property>
-          <layout class="QVBoxLayout" name="verticalLayout_7">
+          <layout class="QVBoxLayout" name="verticalLayout_13">
            <item>
-            <layout class="QHBoxLayout" name="horizontalLayout_7" stretch="1,2">
+            <layout class="QHBoxLayout" name="horizontalLayout_12" stretch="1,2">
              <item>
-              <widget class="QPushButton" name="pushButton_ImportTF">
+              <widget class="QLabel" name="label_6">
                <property name="text">
-                <string>导入</string>
+                <string>尺寸</string>
+               </property>
+               <property name="alignment">
+                <set>Qt::AlignCenter</set>
                </property>
               </widget>
              </item>
              <item>
-              <widget class="QLabel" name="label_ImportTF">
+              <widget class="QLabel" name="label_ImportedDim">
                <property name="text">
-                <string/>
+                <string>--, --, --</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="horizontalLayout_15" stretch="1,2">
+             <item>
+              <widget class="QLabel" name="label_7">
+               <property name="text">
+                <string>数据范围</string>
+               </property>
+               <property name="alignment">
+                <set>Qt::AlignCenter</set>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="label_ImportedValRng">
+               <property name="text">
+                <string>[--, --]</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="horizontalLayout_13" stretch="1,2">
+             <item>
+              <widget class="QLabel" name="label_8">
+               <property name="text">
+                <string>经纬高范围</string>
+               </property>
+               <property name="alignment">
+                <set>Qt::AlignCenter</set>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="label_ImportedLLHRng">
+               <property name="text">
+                <string>[--, --], [--, --], [--, --]</string>
                </property>
               </widget>
              </item>
             </layout>
            </item>
           </layout>
+          <zorder></zorder>
+          <zorder></zorder>
+          <zorder></zorder>
          </widget>
         </item>
        </layout>

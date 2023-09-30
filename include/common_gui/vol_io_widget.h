@@ -9,7 +9,6 @@
 #include <QtWidgets/qfiledialog.h>
 #include <QtGui/qevent.h>
 #include <QtWidgets/qwidget.h>
-#include <QtWidgets/qcolordialog.h>
 
 #include <ui_vol_io_widget.h>
 
@@ -51,13 +50,24 @@ public:
 	{
 		ui.setupUi(this);
 
-		reinterpret_cast<QVBoxLayout*>(ui.groupBox_TF->layout())->insertWidget(2, &tfWdgt);
+		ui.groupBox_TF->layout()->addWidget(&tfWdgt);
 
 		dim[0] = dim[1] = dim[2] = 0;
 
 		connect(ui.horizontalSlider_HeatMapZ, &QSlider::valueChanged, [&](int val) {
 			ui.label_HeatMapZ->setText(QString::number(val));
 			updateHeatMap();
+			});
+
+		connect(ui.checkBox_UseValRngForNorm, &QCheckBox::stateChanged, [&](int state) {
+			if (state == Qt::Checked) {
+				ui.doubleSpinBox_MinValForNorm->setEnabled(true);
+				ui.doubleSpinBox_MaxValForNorm->setEnabled(true);
+			}
+			else {
+				ui.doubleSpinBox_MinValForNorm->setEnabled(false);
+				ui.doubleSpinBox_MaxValForNorm->setEnabled(false);
+			}
 			});
 
 		connect(ui.pushButton_ImportRAW, &QPushButton::clicked, this, &VolumeIOWidget::importRAWVolume);
@@ -68,34 +78,8 @@ public:
 		connect(ui.comboBox_TFSrc,
 			static_cast<void(QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
 			this, &VolumeIOWidget::updateHeatMap);
-		connect(&tfWdgt, &TransferFunctionWidget::PointPicked, [&](uint8_t scalar) {
-			ui.label_TFPointPicked->setText(QString("%1 -> --").arg(static_cast<int>(scalar)));
-			});
-		connect(&tfWdgt, &TransferFunctionWidget::PointPlaced, [&](uint8_t from, uint8_t to) {
-			ui.label_TFPointPicked->setText(QString("%1 -> %2").arg(static_cast<int>(from)).arg(static_cast<int>(to)));
-			});
-		connect(&tfWdgt, &TransferFunctionWidget::TransferFunctionChanged,
-			[&](uint8_t scalar, const std::array<float, 4>& color) {
-				prevScalar = scalar;
-				prevColor = color;
 
-				updateHeatMap();
-			});
-		connect(ui.pushButton_TFPointColored, &QPushButton::clicked, [&]() {
-			QColor prevQCol(
-				static_cast<int>(255.f * prevColor[0]),
-				static_cast<int>(255.f * prevColor[1]),
-				static_cast<int>(255.f * prevColor[2]));
-			auto qCol = QColorDialog::getColor(prevQCol);
-			if (!qCol.isValid()) return;
-
-			prevColor[0] = static_cast<float>(qCol.red()) / 255.f;
-			prevColor[1] = static_cast<float>(qCol.green()) / 255.f;
-			prevColor[2] = static_cast<float>(qCol.blue()) / 255.f;
-			tfWdgt.SetTransferFunctionPointColor(prevScalar, prevColor);
-
-			update();
-			});
+		connect(&tfWdgt, &TransferFunctionWidget::TransferFunctionChanged, this, &VolumeIOWidget::updateHeatMap);
 
 		connect(ui.pushButton_ExportVolume, &QPushButton::clicked, this, &VolumeIOWidget::exportRAWVolume);
 		connect(ui.pushButton_ExportTF, &QPushButton::clicked, this, &VolumeIOWidget::exportTransferFunction);
@@ -158,15 +142,24 @@ private:
 		if (filePath.isEmpty()) return;
 		std::string errMsg;
 		auto dim = readDimensionFromUI();
-		auto u8Dat = SciVis::Loader::RAWVolume::LoadFromFile(filePath.toStdString(), dim, &errMsg);
+		auto u8Dat = SciVis::Loader::RAWVolume::LoadU8FromFile(filePath.toStdString(), dim, &errMsg);
 		if (!errMsg.empty()) {
-			ui.label_ImportRAW->setText(tr(errMsg.c_str()));
+			ui.label_ImportedRAW->setText(tr(errMsg.c_str()));
 			return;
 		}
 
-		ui.label_ImportRAW->setText(filePath);
+		ui.label_ImportedDim->setText("--, --, --");
+		ui.label_ImportedLLHRng->setText("[--, --], [--, --], [--, --]");
+		ui.label_ImportedValRng->setText("[--, --]");
+
+		ui.label_ImportedRAW->setText(filePath);
+		ui.label_ImportedTXT->clear();
+		ui.label_ImportedLabeledTXT->clear();
+		ui.label_MinZ->setText(QString::number(0));
+		ui.label_MaxZ->setText(QString::number(dim[2] - 1));
+		ui.horizontalSlider_HeatMapZ->setRange(0, dim[2] - 1);
 		this->dim = dim;
-		this->vol = SciVis::Convertor::RAWVolume::U8ToFloat(u8Dat);
+		this->vol = SciVis::Convertor::RAWVolume::U8ToNormalizedFloat(u8Dat);
 
 		updateHeatMap();
 	}
@@ -178,6 +171,49 @@ private:
 
 	void importLabeledTXTVolume()
 	{
+		auto filePath = QFileDialog::getOpenFileName(
+			nullptr, tr("Open TXT File"), "./", tr("Transfer Function (*.txt)"));
+		std::string errMsg;
+		auto vol = SciVis::Loader::LabeledTXTVolume::LoadFromFile(filePath.toStdString(), &errMsg);
+		if (!errMsg.empty()) {
+			ui.label_ImportedLabeledTXT->setText(tr(errMsg.c_str()));
+			return;
+		}
+		if (!vol.isDense) {
+			ui.label_ImportedLabeledTXT->setText(tr("Sparse Labeled TXT Volume is NOT Supported"));
+			return;
+		}
+
+		ui.label_ImportedRAW->clear();
+		ui.label_ImportedTXT->clear();
+
+		ui.label_ImportedDim->setText(QString("%1, %2, %3").arg(vol.dim[0])
+			.arg(vol.dim[1]).arg(vol.dim[2]));
+		ui.label_ImportedLLHRng->setText(QString("[%1, %2], [%3, %4], [%5, %6]")
+			.arg(static_cast<double>(vol.lonRng[0]), 0, 'f', 2)
+			.arg(static_cast<double>(vol.lonRng[1]), 0, 'f', 2)
+			.arg(static_cast<double>(vol.latRng[0]), 0, 'f', 2)
+			.arg(static_cast<double>(vol.latRng[1]), 0, 'f', 2)
+			.arg(static_cast<double>(vol.hRng[0]), 0, 'f', 2)
+			.arg(static_cast<double>(vol.hRng[1]), 0, 'f', 2));
+		ui.label_ImportedValRng->setText(QString("[%1, %2]")
+			.arg(static_cast<double>(vol.valRng[0]), 0, 'f', 2)
+			.arg(static_cast<double>(vol.valRng[1]), 0, 'f', 2));
+		ui.label_ImportedLabeledTXT->setText(filePath);
+		ui.label_MinZ->setText(QString::number(0));
+		ui.label_MaxZ->setText(QString::number(vol.dim[2] - 1));
+		ui.horizontalSlider_HeatMapZ->setRange(0, vol.dim[2] - 1);
+
+		std::array<float, 2> userSpecifiedValRng = {
+			static_cast<float>(ui.doubleSpinBox_MinValForNorm->value()),
+			static_cast<float>(ui.doubleSpinBox_MaxValForNorm->value())
+		};
+		vol.Normalize(ui.checkBox_UseValRngForNorm->isChecked() ?
+			&userSpecifiedValRng : nullptr);
+		this->vol = vol.dat;
+		this->dim = vol.dim;
+
+		updateHeatMap();
 	}
 
 	void importTransferFunction()
@@ -187,11 +223,11 @@ private:
 		std::string errMsg;
 		auto pnts = SciVis::Loader::TransferFunctionPoints::LoadFromFile(filePath.toStdString(), &errMsg);
 		if (!errMsg.empty()) {
-			ui.label_ImportTF->setText(tr(errMsg.c_str()));
+			ui.label_ImportedTF->setText(tr(errMsg.c_str()));
 			return;
 		}
 
-		ui.label_ImportTF->setText(filePath);
+		ui.label_ImportedTF->setText(filePath);
 		ui.comboBox_TFSrc->setCurrentIndex(static_cast<int>(ComboBoxIndex_TFSrc::FromFileOrCustomed));
 
 		tfWdgt.SetTransferFunctionPointsData(pnts);
@@ -200,7 +236,12 @@ private:
 
 	void exportRAWVolume()
 	{
+		auto filePath = QFileDialog::getSaveFileName(
+			nullptr, tr("Open RAW File"), "./", tr("Binary (*.raw *.bin *.dat)"));
+		if (filePath.isEmpty()) return;
 
+		auto u8Dat = SciVis::Convertor::RAWVolume::NormalizedFloatToU8(vol);
+		SciVis::Loader::RAWVolume::DumpToFile(filePath.toStdString(), u8Dat);
 	}
 
 	void exportTransferFunction()

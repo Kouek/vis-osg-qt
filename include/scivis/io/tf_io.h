@@ -1,8 +1,8 @@
 #ifndef SCIVIS_IO_TF_IO_H
 #define SCIVIS_IO_TF_IO_H
 
-#include <string>
 #include <fstream>
+
 #include <vector>
 
 namespace SciVis

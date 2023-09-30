@@ -2,21 +2,49 @@
 #define TF_WIDGET_H
 
 #include <array>
-#include <queue>
 #include <vector>
 
 #include <QtGui/qevent.h>
+#include <QtWidgets/qcolordialog.h>
 #include <QtWidgets/qgraphicsitem.h>
 #include <QtWidgets/qgraphicsview.h>
 #include <QtWidgets/qgraphicssceneevent.h>
 
-class TransferFunctionWidget : public QGraphicsView
+#include <ui_tf_widget.h>
+
+class TransferFunctionView : public QGraphicsView
+{
+	Q_OBJECT
+
+public:
+	static constexpr qreal AxHeight = 256. / 4.;
+
+public:
+	TransferFunctionView(QGraphicsScene* scn, QWidget* parent) : QGraphicsView(scn, parent)
+	{}
+
+	void AdjustViewportToFit()
+	{
+		fitInView(scene()->itemsBoundingRect(), Qt::KeepAspectRatio);
+	}
+
+	virtual void resizeEvent(QResizeEvent* ev) override
+	{
+		AdjustViewportToFit();
+		QGraphicsView::resizeEvent(ev);
+	}
+};
+
+namespace Ui
+{
+	class TransferFunctionWidget;
+}
+
+class TransferFunctionWidget : public QWidget
 {
 	Q_OBJECT
 
 private:
-#define AX_HEIGHT (255. / 3.)
-
 	class Point : public QGraphicsRectItem
 	{
 	private:
@@ -41,7 +69,7 @@ private:
 		{
 			QGraphicsRectItem::mouseReleaseEvent(ev);
 
-			auto validPos = [&]() {
+			auto validPos = [&]() -> QPointF {
 				auto p = scenePos();
 				if (p.x() < 0.)
 					p.setX(0.);
@@ -49,8 +77,8 @@ private:
 					p.setX(255.);
 				if (p.y() < 0.)
 					p.setY(0.);
-				if (p.y() > AX_HEIGHT)
-					p.setY(AX_HEIGHT);
+				if (p.y() > TransferFunctionView::AxHeight)
+					p.setY(TransferFunctionView::AxHeight);
 
 				// 不改变两端的x值
 				if (scalar == 0)
@@ -64,13 +92,13 @@ private:
 
 			auto currScalar = floorf(validPos.x());
 			if (currScalar == scalar) {
-				tfWdgt->tfPntsDat[scalar][3] = 1. - validPos.y() / AX_HEIGHT;
+				tfWdgt->tfPntsDat[scalar][3] = 1. - validPos.y() / TransferFunctionView::AxHeight;
 				tfWdgt->updatePointFromData(scalar);
 			}
 			else {
 				tfWdgt->tfPntsDat[currScalar] = tfWdgt->tfPntsDat[scalar];
 				tfWdgt->tfPntsDat[scalar][3] = -1.f;
-				tfWdgt->tfPntsDat[currScalar][3] = 1. - validPos.y() / AX_HEIGHT;
+				tfWdgt->tfPntsDat[currScalar][3] = 1. - validPos.y() / TransferFunctionView::AxHeight;
 
 				tfWdgt->updatePointFromData(scalar);
 				tfWdgt->updatePointFromData(currScalar);
@@ -82,6 +110,9 @@ private:
 		}
 	};
 
+	uint8_t prevScalar;
+	std::array<float, 4> prevColor;
+
 	std::array<int32_t, 2> tfDatDirtyRng; // 用于确定tfDat需要更新的范围
 	std::array<std::array<float, 4>, 256 > tfDat; // 稠密数据，依赖于tfPntsDat，只用于输出
 
@@ -89,26 +120,34 @@ private:
 	std::array<Point*, 256> pnts; // 依赖于tfPntsDat，只用于显示和交互
 
 	QGraphicsScene scn;
+	TransferFunctionView view;
+
+	Ui::TransferFunctionWidget ui;
 
 public:
-	TransferFunctionWidget(QWidget* parent = nullptr) : QGraphicsView(parent)
+	TransferFunctionWidget(QWidget* parent = nullptr)
+		: QWidget(parent), view(&scn, this)
 	{
+		ui.setupUi(this);
+		reinterpret_cast<QGridLayout*>(layout())
+			->addWidget(&view, 1, 0, 1, 2);
+
 		tfDatDirtyRng[0] = tfDatDirtyRng[1] = -1;
 
 		scn.setBackgroundBrush(QBrush(Qt::black));
 		{
-			auto x = 255. / 10.;
-			auto y = AX_HEIGHT / 10.;
+			auto x = .1 * 255.;
+			auto y = .1 * TransferFunctionView::AxHeight;
 
 			QPen pen(Qt::red, 1.);
 			scn.addLine(-x, 0., 255. + x, 0., pen);
-			scn.addLine(-x, AX_HEIGHT, 255. + x, AX_HEIGHT, pen);
+			scn.addLine(-x, TransferFunctionView::AxHeight, 255. + x,
+				TransferFunctionView::AxHeight, pen);
 
 			pen.setColor(Qt::green);
-			scn.addLine(0., -y, 0., AX_HEIGHT + y, pen);
-			scn.addLine(255., -y, 255., AX_HEIGHT + y, pen);
+			scn.addLine(0., -y, 0., TransferFunctionView::AxHeight + y, pen);
+			scn.addLine(255., -y, 255., TransferFunctionView::AxHeight + y, pen);
 		}
-		setScene(&scn);
 
 		connect(this, &TransferFunctionWidget::TransferFunctionChanged,
 			[&](uint8_t scalar, const std::array<float, 4>& color) {
@@ -121,6 +160,39 @@ public:
 					tfDatDirtyRng[1] = scalar;
 				else if (tfDatDirtyRng[1] < scalar)
 					tfDatDirtyRng[1] = scalar;
+			});
+
+		connect(this, &TransferFunctionWidget::PointPicked, [&](uint8_t scalar) {
+			prevScalar = scalar;
+			prevColor = tfPntsDat[scalar];
+
+			ui.label_TFPointMoved->setText(QString("%1 -> -- (--, --, --, --)")
+				.arg(static_cast<int>(scalar)));
+			});
+		connect(this, &TransferFunctionWidget::TransferFunctionChanged,
+			[&](uint8_t scalar, const std::array<float, 4>& color) {
+				ui.label_TFPointMoved->setText(QString("%1 -> %2 (%3, %4, %5, %6)")
+					.arg(static_cast<int>(prevScalar)).arg(static_cast<int>(scalar))
+					.arg(static_cast<int>(255.f * color[0]))
+					.arg(static_cast<int>(255.f * color[1]))
+					.arg(static_cast<int>(255.f * color[2]))
+					.arg(static_cast<int>(255.f * color[3])));
+
+				prevScalar = scalar;
+				prevColor = color;
+			});
+		connect(ui.pushButton_ColorTFPoint, &QPushButton::clicked, [&]() {
+			QColor prevQCol(
+				static_cast<int>(255.f * prevColor[0]),
+				static_cast<int>(255.f * prevColor[1]),
+				static_cast<int>(255.f * prevColor[2]));
+			auto qCol = QColorDialog::getColor(prevQCol);
+			if (!qCol.isValid()) return;
+
+			prevColor[0] = static_cast<float>(qCol.red()) / 255.f;
+			prevColor[1] = static_cast<float>(qCol.green()) / 255.f;
+			prevColor[2] = static_cast<float>(qCol.blue()) / 255.f;
+			SetTransferFunctionPointColor(prevScalar, prevColor);
 			});
 	}
 
@@ -165,17 +237,6 @@ public:
 		return tfDat[scalar];
 	}
 
-	void AdjustViewportToFit()
-	{
-		fitInView(scn.itemsBoundingRect(), Qt::KeepAspectRatio);
-	}
-
-	virtual void resizeEvent(QResizeEvent* ev) override
-	{
-		AdjustViewportToFit();
-		QGraphicsView::resizeEvent(ev);
-	}
-
 signals:
 	void PointPicked(uint8_t scalar);
 	void PointPlaced(uint8_t fromScalar, uint8_t toScalar);
@@ -201,13 +262,13 @@ private:
 			auto ptr = new Point(scalar, color, this);
 			ptr->setFlag(QGraphicsItem::ItemIsMovable);
 			scn.addItem(ptr);
-			ptr->setPos(scalar, AX_HEIGHT * (1.f - tfPntsDat[scalar][3]));
+			ptr->setPos(scalar, TransferFunctionView::AxHeight * (1.f - tfPntsDat[scalar][3]));
 
 			pnts[scalar] = ptr;
 		}
 		else {
 			auto ptr = pnts[scalar];
-			ptr->setPos(ptr->pos().x(), AX_HEIGHT * (1.f - tfPntsDat[scalar][3]));
+			ptr->setPos(ptr->pos().x(), TransferFunctionView::AxHeight * (1.f - tfPntsDat[scalar][3]));
 			ptr->setBrush(QBrush(color));
 		}
 	}
@@ -249,8 +310,6 @@ private:
 
 		tfDatDirtyRng[0] = tfDatDirtyRng[1] = -1;
 	}
-
-#undef AXHEIGHT
 };
 
 #endif // !TF_WIDGET_H

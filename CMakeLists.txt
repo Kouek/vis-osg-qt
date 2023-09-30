@@ -53,6 +53,12 @@ file(GLOB COMM_GUI_HEADER_SRC "${CMAKE_CURRENT_LIST_DIR}/include/common_gui/*.h"
 file(GLOB COMM_GUI_UI_SRC "${CMAKE_CURRENT_LIST_DIR}/include/common_gui/*.ui")
 # </lib: CommonGUI>
 
+# <lib: SciVis>
+add_compile_definitions(
+	SCIVIS_SHADER_PREFIX="${CMAKE_CURRENT_LIST_DIR}/shader/"
+)
+# </lib: SciVis>
+
 # <app>
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/bin")
 file(GLOB APP_PATHS "${CMAKE_CURRENT_LIST_DIR}/app/*" LIST_DIR)
