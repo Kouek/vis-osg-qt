@@ -74,9 +74,6 @@ int main(int argc, char** argv)
 {
 	QApplication app(argc, argv);
 	
-	MainWindow mainWnd;
-	mainWnd.show();
-
 	auto* viewer = new osgViewer::Viewer;
 	viewer->setUpViewInWindow(200, 50, 800, 600);
 	auto* manipulator = new osgGA::TrackballManipulator;
@@ -88,13 +85,13 @@ int main(int argc, char** argv)
 	std::shared_ptr<SciVis::ScalarViser::DirectVolumeRenderer> dvr
 		= std::make_shared<SciVis::ScalarViser::DirectVolumeRenderer>();
 
-	std::string errMsg;
-	auto tfPnts = SciVis::Loader::TransferFunctionPoints::LoadFromFile(
-		tfPath, &errMsg);
-	if (!errMsg.empty())
-		goto ERR;
+	MainWindow mainWnd(dvr);
+	mainWnd.show();
 
-	for (size_t i = 0; i < 1; ++i) {
+	auto tfTex = mainWnd.GetTFTexture();
+
+	std::string errMsg;
+	for (size_t i = 0; i < volPaths.size(); ++i) {
 		auto volU8Dat = SciVis::Loader::RAWVolume::LoadU8FromFile(
 			volPaths[i], dim, &errMsg);
 		if (!errMsg.empty())
@@ -103,7 +100,6 @@ int main(int argc, char** argv)
 		auto volDat = SciVis::Convertor::RAWVolume::U8ToNormalizedFloat(volU8Dat);
 		auto volTex = SciVis::OSGConvertor::RAWVolume::
 			NormalizedFloatToTexture(volDat, dim, log2Dim);
-		auto tfTex = SciVis::OSGConvertor::TransferFunctionPoints::ToTexture(tfPnts);
 
 		dvr->AddVolume(volNames[i], volTex, tfTex, false);
 		auto vol = dvr->GetVolume(volNames[i]);
@@ -121,9 +117,18 @@ int main(int argc, char** argv)
 	grp->addChild(dvr->GetGroup());
 	
 	viewer->setSceneData(grp);
+
+	auto prevClk = clock();
 	while (!viewer->done()) {
+		auto currClk = clock();
+		auto duration = currClk - prevClk;
+
 		app.processEvents();
-		viewer->frame();
+
+		if (duration >= CLOCKS_PER_SEC / 45) {
+			viewer->frame();
+			prevClk = clock();
+		}
 	}
 
 	return 0;

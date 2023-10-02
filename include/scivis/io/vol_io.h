@@ -87,7 +87,7 @@ namespace SciVis
 
 			void Normalize(const std::array<float, 2>* valRng = nullptr)
 			{
-				if (valRng && valRng[1] > valRng[0])
+				if (valRng && (*valRng)[1] > (*valRng)[0])
 					this->valRng = *valRng;
 
 				auto rngWid = this->valRng[1] - this->valRng[0];

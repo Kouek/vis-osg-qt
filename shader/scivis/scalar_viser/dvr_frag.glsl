@@ -56,7 +56,7 @@ float anotherIntersectionOuterSphere(vec3 p, vec3 p2eDir) {
 }
 #define PI 3.14159
 void main() {
-	#define TEST
+	//#define TEST
 	// ¿ªÆôTESTºê£¬²âÊÔÌŞ³ı¹¦ÄÜ
 #ifdef TEST
 	vec3 d = normalize(vertex - eyePos);

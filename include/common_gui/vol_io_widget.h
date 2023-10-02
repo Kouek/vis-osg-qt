@@ -28,11 +28,9 @@ class VolumeIOWidget : public QWidget
 
 private:
 	std::array<uint32_t, 3> dim;
-	std::array<float, 2> scalarRng;
 	std::vector<float> vol;
-
-	uint8_t prevScalar;
-	std::array<float, 4> prevColor;
+	std::vector<std::vector<float>> vols;
+	std::vector<QString> volNames;
 
 	QImage heatMap;
 	TransferFunctionWidget tfWdgt;
@@ -73,6 +71,8 @@ public:
 		connect(ui.pushButton_ImportRAW, &QPushButton::clicked, this, &VolumeIOWidget::importRAWVolume);
 		connect(ui.pushButton_ImportTXT, &QPushButton::clicked, this, &VolumeIOWidget::importTXTVolume);
 		connect(ui.pushButton_ImportLabeledTXT, &QPushButton::clicked, this, &VolumeIOWidget::importLabeledTXTVolume);
+		connect(ui.pushButton_ImportLabeledTXTTimeSeries, &QPushButton::clicked,
+			this, &VolumeIOWidget::importLabeledTXTVolumeTimeSeries);
 		connect(ui.pushButton_ImportTF, &QPushButton::clicked, this, &VolumeIOWidget::importTransferFunction);
 
 		connect(ui.comboBox_TFSrc,
@@ -110,6 +110,7 @@ private:
 		};
 		auto volZ = static_cast<size_t>(ui.horizontalSlider_HeatMapZ->value());
 		auto dimYxX = static_cast<size_t>(dim[1]) * dim[0];
+		const auto& vol = this->vols.empty() ? this->vol : this->vols[0];
 		for (int y = 0; y < heatMap.height(); ++y) {
 			auto pxPtr = reinterpret_cast<QRgb*>(heatMap.scanLine(y));
 			for (int x = 0; x < heatMap.width(); ++x, ++pxPtr) {
@@ -135,11 +136,10 @@ private:
 
 	void importRAWVolume()
 	{
-		clearVolumeData();
-
 		auto filePath = QFileDialog::getOpenFileName(
-			nullptr, tr("Open RAW File"), "./", tr("Binary (*.raw *.bin *.dat)"));
+			this, tr("Open RAW File"), "./", tr("Binary (*.raw *.bin *.dat)"));
 		if (filePath.isEmpty()) return;
+
 		std::string errMsg;
 		auto dim = readDimensionFromUI();
 		auto u8Dat = SciVis::Loader::RAWVolume::LoadU8FromFile(filePath.toStdString(), dim, &errMsg);
@@ -152,12 +152,16 @@ private:
 		ui.label_ImportedLLHRng->setText("[--, --], [--, --], [--, --]");
 		ui.label_ImportedValRng->setText("[--, --]");
 
-		ui.label_ImportedRAW->setText(filePath);
 		ui.label_ImportedTXT->clear();
 		ui.label_ImportedLabeledTXT->clear();
+		ui.label_ImportedLabeledTXTTimeSeries->clear();
+
+		ui.label_ImportedRAW->setText(filePath);
 		ui.label_MinZ->setText(QString::number(0));
 		ui.label_MaxZ->setText(QString::number(dim[2] - 1));
 		ui.horizontalSlider_HeatMapZ->setRange(0, dim[2] - 1);
+
+		clearVolumeData();
 		this->dim = dim;
 		this->vol = SciVis::Convertor::RAWVolume::U8ToNormalizedFloat(u8Dat);
 
@@ -172,7 +176,9 @@ private:
 	void importLabeledTXTVolume()
 	{
 		auto filePath = QFileDialog::getOpenFileName(
-			nullptr, tr("Open TXT File"), "./", tr("Transfer Function (*.txt)"));
+			this, tr("Open TXT File"), "./", tr("Labeled TXT (*.txt)"));
+		if (filePath.isEmpty()) return;
+
 		std::string errMsg;
 		auto vol = SciVis::Loader::LabeledTXTVolume::LoadFromFile(filePath.toStdString(), &errMsg);
 		if (!errMsg.empty()) {
@@ -186,7 +192,9 @@ private:
 
 		ui.label_ImportedRAW->clear();
 		ui.label_ImportedTXT->clear();
+		ui.label_ImportedLabeledTXTTimeSeries->clear();
 
+		ui.label_ImportedLabeledTXT->setText(filePath);
 		ui.label_ImportedDim->setText(QString("%1, %2, %3").arg(vol.dim[0])
 			.arg(vol.dim[1]).arg(vol.dim[2]));
 		ui.label_ImportedLLHRng->setText(QString("[%1, %2], [%3, %4], [%5, %6]")
@@ -199,7 +207,6 @@ private:
 		ui.label_ImportedValRng->setText(QString("[%1, %2]")
 			.arg(static_cast<double>(vol.valRng[0]), 0, 'f', 2)
 			.arg(static_cast<double>(vol.valRng[1]), 0, 'f', 2));
-		ui.label_ImportedLabeledTXT->setText(filePath);
 		ui.label_MinZ->setText(QString::number(0));
 		ui.label_MaxZ->setText(QString::number(vol.dim[2] - 1));
 		ui.horizontalSlider_HeatMapZ->setRange(0, vol.dim[2] - 1);
@@ -210,8 +217,104 @@ private:
 		};
 		vol.Normalize(ui.checkBox_UseValRngForNorm->isChecked() ?
 			&userSpecifiedValRng : nullptr);
-		this->vol = vol.dat;
+
+		clearVolumeData();
 		this->dim = vol.dim;
+		this->vol = vol.dat;
+
+		updateHeatMap();
+	}
+
+	void importLabeledTXTVolumeTimeSeries()
+	{
+		auto filePaths = QFileDialog::getOpenFileNames(
+			this, tr("Open TXT File"), "./", tr("Labeled TXT (*.txt)"));
+		if (filePaths.isEmpty()) return;
+
+		std::vector<SciVis::Loader::LabeledTXTVolume> vols;
+		std::string errMsg;
+		vols.reserve(filePaths.size());
+		for (size_t i = 0; i < filePaths.size(); ++i) {
+			auto vol = SciVis::Loader::LabeledTXTVolume::LoadFromFile(
+				filePaths[i].toStdString(), &errMsg);
+			if (!errMsg.empty()) {
+				ui.label_ImportedLabeledTXTTimeSeries->setText(tr(errMsg.c_str()));
+				return;
+			}
+			if (!vol.isDense) {
+				ui.label_ImportedLabeledTXTTimeSeries
+					->setText(tr("Sparse Labeled TXT Volume is NOT Supported"));
+				return;
+			}
+
+			vols.emplace_back(vol);
+		}
+
+		auto dim = vols[0].dim;
+		auto lonRng = vols[0].lonRng;
+		auto latRng = vols[0].latRng;
+		auto hRng = vols[0].hRng;
+		auto valRng = vols[0].valRng;
+		for (size_t i = 1; i < filePaths.size(); ++i) {
+			if (dim != vols[i].dim) {
+				ui.label_ImportedLabeledTXTTimeSeries
+					->setText(tr("Dimensions of Volume 0 and %1 are NOT the Same").arg(i));
+				return;
+			}
+			if (lonRng != vols[i].lonRng) {
+				ui.label_ImportedLabeledTXTTimeSeries
+					->setText(tr("Longtitute Ranges of Volume 0 and %1 are NOT the Same").arg(i));
+				return;
+			}
+			if (latRng != vols[i].latRng) {
+				ui.label_ImportedLabeledTXTTimeSeries
+					->setText(tr("Latitute Ranges of Volume 0 and %1 are NOT the Same").arg(i));
+				return;
+			}
+			if (hRng != vols[i].hRng) {
+				ui.label_ImportedLabeledTXTTimeSeries
+					->setText(tr("Height Ranges of Volume 0 and %1 are NOT the Same").arg(i));
+				return;
+			}
+
+			if (valRng[0] > vols[i].valRng[0])
+				valRng[0] = vols[i].valRng[0];
+			if (valRng[1] < vols[i].valRng[1])
+				valRng[1] = vols[i].valRng[1];
+		}
+
+		ui.label_ImportedRAW->clear();
+		ui.label_ImportedTXT->clear();
+		ui.label_ImportedLabeledTXT->clear();
+
+		ui.label_ImportedLabeledTXTTimeSeries->setText(filePaths[0]);
+		ui.label_ImportedDim->setText(QString("%1, %2, %3").arg(dim[0])
+			.arg(dim[1]).arg(dim[2]));
+		ui.label_ImportedLLHRng->setText(QString("[%1, %2], [%3, %4], [%5, %6]")
+			.arg(static_cast<double>(lonRng[0]), 0, 'f', 2)
+			.arg(static_cast<double>(lonRng[1]), 0, 'f', 2)
+			.arg(static_cast<double>(latRng[0]), 0, 'f', 2)
+			.arg(static_cast<double>(latRng[1]), 0, 'f', 2)
+			.arg(static_cast<double>(hRng[0]), 0, 'f', 2)
+			.arg(static_cast<double>(hRng[1]), 0, 'f', 2));
+		ui.label_ImportedValRng->setText(QString("[%1, %2]")
+			.arg(static_cast<double>(valRng[0]), 0, 'f', 2)
+			.arg(static_cast<double>(valRng[1]), 0, 'f', 2));
+		ui.label_MinZ->setText(QString::number(0));
+		ui.label_MaxZ->setText(QString::number(dim[2] - 1));
+		ui.horizontalSlider_HeatMapZ->setRange(0, dim[2] - 1);
+
+		clearVolumeData();
+		this->dim = dim;
+		this->vols.reserve(filePaths.size());
+		this->volNames.reserve(filePaths.size());
+		for (size_t i = 0; i < filePaths.size(); ++i) {
+			vols[i].Normalize(&valRng);
+			this->vols.emplace_back(vols[i].dat);
+
+			QFileInfo fileInfo(filePaths[i]);
+			this->volNames.emplace_back(fileInfo.baseName());
+		}
 
 		updateHeatMap();
 	}
@@ -219,7 +322,7 @@ private:
 	void importTransferFunction()
 	{
 		auto filePath = QFileDialog::getOpenFileName(
-			nullptr, tr("Open TXT File"), "./", tr("Transfer Function (*.txt)"));
+			this, tr("Open TXT File"), "./", tr("Transfer Function (*.txt)"));
 		std::string errMsg;
 		auto pnts = SciVis::Loader::TransferFunctionPoints::LoadFromFile(filePath.toStdString(), &errMsg);
 		if (!errMsg.empty()) {
@@ -236,35 +339,43 @@ private:
 
 	void exportRAWVolume()
 	{
-		auto filePath = QFileDialog::getSaveFileName(
-			nullptr, tr("Open RAW File"), "./", tr("Binary (*.raw *.bin *.dat)"));
-		if (filePath.isEmpty()) return;
+		if (vols.empty()) {
+			auto filePath = QFileDialog::getSaveFileName(
+				this, tr("Open RAW File"), "./", tr("Binary (*.raw *.bin *.dat)"));
+			if (filePath.isEmpty()) return;
 
-		auto u8Dat = SciVis::Convertor::RAWVolume::NormalizedFloatToU8(vol);
-		SciVis::Loader::RAWVolume::DumpToFile(filePath.toStdString(), u8Dat);
+			auto u8Dat = SciVis::Convertor::RAWVolume::NormalizedFloatToU8(vol);
+			SciVis::Loader::RAWVolume::DumpToFile(filePath.toStdString(), u8Dat);
+		}
+		else {
+			auto dirPath = QFileDialog::getExistingDirectory(
+				this, tr("Open Exporting Directory"), "./",
+				QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
+			if (dirPath.isEmpty()) return;
+
+			for (size_t i = 0; i < vols.size(); ++i) {
+				auto u8Dat = SciVis::Convertor::RAWVolume::NormalizedFloatToU8(vols[i]);
+				auto filePath = dirPath + '/' + volNames[i] + ".raw";
+				SciVis::Loader::RAWVolume::DumpToFile(filePath.toStdString(), u8Dat);
+			}
+		}
 	}
 
 	void exportTransferFunction()
 	{
 		auto filePath = QFileDialog::getSaveFileName(
-			nullptr, tr("Open TXT File"), "./", tr("Transfer Function (*.txt)"));
+			this, tr("Open TXT File"), "./", tr("Transfer Function (*.txt)"));
 		if (filePath.isEmpty()) return;
 
-		std::vector<std::pair<uint8_t, std::array<float, 4>>> tfPntsDat;
-		for (uint32_t s = 0; s <= 255; ++s) {
-			auto color = tfWdgt.GetTransferFunctionPointColor(s);
-			if (color[3] >= 0.f)
-				tfPntsDat.emplace_back(std::make_pair(static_cast<uint8_t>(s), color));
-		}
-
-		SciVis::Loader::TransferFunctionPoints::DumpToFile(filePath.toStdString(), tfPntsDat);
+		auto tfPnts = tfWdgt.GetTransferFunctionPointsData();
+		SciVis::Loader::TransferFunctionPoints::DumpToFile(filePath.toStdString(), tfPnts);
 	}
 
 	void clearVolumeData()
 	{
-		scalarRng[0] = std::numeric_limits<float>::min();
-		scalarRng[1] = std::numeric_limits<float>::max();
 		vol.clear();
+		vols.clear();
+		volNames.clear();
 	}
 
 	std::array<uint32_t, 3> readDimensionFromUI()
