@@ -84,6 +84,8 @@ int main(int argc, char** argv)
 
 	std::shared_ptr<SciVis::ScalarViser::DirectVolumeRenderer> dvr
 		= std::make_shared<SciVis::ScalarViser::DirectVolumeRenderer>();
+	dvr->SetDeltaT(hScale * (hRng[1] - hRng[0]) / dim[2] * .3f);
+	dvr->SetMaxStepCount(800);
 
 	MainWindow mainWnd(dvr);
 	mainWnd.show();
@@ -110,8 +112,6 @@ int main(int argc, char** argv)
 			static_cast<float>(osg::WGS_84_RADIUS_EQUATOR) + hScale * hRng[1]);
 	}
 
-	dvr->SetDeltaT(hScale * (hRng[1] - hRng[0]) / dim[2] * .3f);
-	dvr->SetMaxStepCount(800);
 	dvr->DisplayVolume(volNames[0]);
 	dvr->GetGroup()->addEventCallback(new DVRSwitchVolumeCallback(dvr));
 	grp->addChild(dvr->GetGroup());

@@ -27,8 +27,11 @@ namespace SciVis
 				osg::ref_ptr<osg::Program> program;
 
 				osg::ref_ptr<osg::Uniform> eyePos;
+				osg::ref_ptr<osg::Uniform> sliceCntr;
+				osg::ref_ptr<osg::Uniform> sliceDir;
 				osg::ref_ptr<osg::Uniform> dt;
 				osg::ref_ptr<osg::Uniform> maxStepCnt;
+				osg::ref_ptr<osg::Uniform> useSlice;
 
 				class Callback : public osg::NodeCallback
 				{
@@ -67,6 +70,9 @@ namespace SciVis
 					STATEMENT(eyePos, osg::Vec3());
 					STATEMENT(dt, static_cast<float>(osg::WGS_84_RADIUS_EQUATOR) * .008f);
 					STATEMENT(maxStepCnt, 100);
+					STATEMENT(useSlice, 0);
+					STATEMENT(sliceCntr, osg::Vec3());
+					STATEMENT(sliceDir, osg::Vec3());
 #undef STATEMENT
 
 					grp->setCullCallback(new Callback(eyePos));
@@ -116,6 +122,9 @@ namespace SciVis
 					states->addUniform(renderer->eyePos);
 					states->addUniform(renderer->dt);
 					states->addUniform(renderer->maxStepCnt);
+					states->addUniform(renderer->useSlice);
+					states->addUniform(renderer->sliceCntr);
+					states->addUniform(renderer->sliceDir);
 
 					states->setTextureAttributeAndModes(0, volTex, osg::StateAttribute::ON);
 					states->setTextureAttributeAndModes(1, tfTex, osg::StateAttribute::ON);
@@ -319,6 +328,12 @@ namespace SciVis
 			{
 				param.dt->set(dt);
 			}
+			float GetDeltaT() const
+			{
+				float ret;
+				param.dt->get(ret);
+				return ret;
+			}
 			/*
 			* 函数: SetMaxStepCount
 			* 功能: 设置体绘制时，光线传播的最大步数
@@ -328,6 +343,29 @@ namespace SciVis
 			void SetMaxStepCount(int maxStepCnt)
 			{
 				param.maxStepCnt->set(maxStepCnt);
+			}
+			int GetMaxStepCount() const
+			{
+				int ret;
+				param.maxStepCnt->get(ret);
+				return ret;
+			}
+			/*
+			* 函数: SetSlicing
+			* 功能: 设置体绘制中的切面
+			* 参数:
+			* -- cntr: 切面的中心点（旋转时的参考点），位于体局部，三分量取值范围为[0, 1]
+			* -- dir: 切面的单位法向量，位于球局部坐标
+			*/
+			void SetSlicing(const osg::Vec3& cntr, const osg::Vec3& dir)
+			{
+				param.useSlice->set(1);
+				param.sliceCntr->set(cntr);
+				param.sliceDir->set(dir);
+			}
+			void DisableSlicing()
+			{
+				param.useSlice->set(0);
 			}
 		};
 

@@ -55,12 +55,16 @@ namespace SciVis
 							auto srcY1 = srcY == srcDim[1] - 1 ? srcY : srcY + 1;
 							auto srcZ1 = srcZ == srcDim[2] - 1 ? srcZ : srcZ + 1;
 
-							auto maxV = 0.f;
+							auto avgV = 0.f;
+							uint8_t cnt = 0;
 							for (int subZ = srcZ; subZ <= srcZ1; ++subZ)
 								for (int subY = srcY; subY <= srcY1; ++subY)
-									for (int subX = srcX; subX <= srcX1; ++subX)
-										maxV = std::max(dat[XYZ2Offs(subX, subY, subZ)], maxV);
-							*pxPtr = maxV;
+									for (int subX = srcX; subX <= srcX1; ++subX) {
+										avgV += dat[XYZ2Offs(subX, subY, subZ)];
+										++cnt;
+									}
+							avgV /= cnt;
+							*pxPtr = avgV;
 
 							++pxPtr;
 						}
