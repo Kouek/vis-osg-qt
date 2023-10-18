@@ -17,8 +17,6 @@
 
 #include "main_window.h"
 
-#define DATA_PATH_PREFIX "D:\\Work\\VIS\\data\\"
-
 static const std::array<std::string, 11> volPaths = {
 		DATA_PATH_PREFIX"OSS/OSS000.raw",
 		DATA_PATH_PREFIX"OSS/OSS006.raw",
@@ -35,7 +33,6 @@ static const std::array<std::string, 11> volPaths = {
 static const std::array<std::string, 11> volNames = {
 		"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"
 };
-static const std::string tfPath = "D:\\Work\\VIS\\toZJU\\vis-osgearth-data\\oss_tf.txt";
 static const std::array<uint32_t, 3> dim = { 300, 350, 50 };
 static const std::array<uint8_t, 3> log2Dim = { 9, 9, 6 };
 static const std::array<float, 2> lonRng = { 100.05f, 129.95f };

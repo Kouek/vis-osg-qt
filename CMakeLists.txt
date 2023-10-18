@@ -60,6 +60,14 @@ add_compile_definitions(
 # </lib: SciVis>
 
 # <app>
+set(DATA_PATH_PREFIX "<NOT-FOUND>" CACHE PATH "Prefix of data path")
+if (${DATA_PATH_PREFIX} STREQUAL "<NOT-FOUND>")
+	message(FATAL_ERROR "DATA_PATH_PREFIX NOT set!")
+endif()
+add_compile_definitions(
+	DATA_PATH_PREFIX="${DATA_PATH_PREFIX}/"
+)
+
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/bin")
 file(GLOB APP_PATHS "${CMAKE_CURRENT_LIST_DIR}/app/*" LIST_DIR)
 foreach(APP_PATH ${APP_PATHS})

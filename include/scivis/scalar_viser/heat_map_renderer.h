@@ -11,8 +11,6 @@
 #include <osg/Texture1D>
 #include <osg/Texture3D>
 
-#include <scivis/common/callback.h>
-
 namespace SciVis
 {
 	namespace ScalarViser

@@ -17,11 +17,8 @@
 
 #include "main_window.h"
 
-#define DATA_PATH_PREFIX "D:\\Work\\VIS\\data\\"
-
 static const std::string volPath = DATA_PATH_PREFIX"OSS/OSS000.raw";
 static const std::string volName = "0";
-static const std::string tfPath = "D:\\Work\\VIS\\toZJU\\vis-osgearth-data\\oss_tf.txt";
 static const std::array<uint32_t, 3> dim = { 300, 350, 50 };
 static const std::array<uint8_t, 3> log2Dim = { 9, 9, 6 };
 static const std::array<float, 2> lonRng = { 100.05f, 129.95f };
@@ -60,6 +57,7 @@ int main(int argc, char** argv)
 		auto vol = mcb->GetVolume(volName);
 		vol->SetLongtituteRange(lonRng[0], lonRng[1]);
 		vol->SetLatituteRange(latRng[0], latRng[1]);
+		vol->SetHeightFromCenterRange(.7f, .75f);
 		vol->SetHeightFromCenterRange(
 			static_cast<float>(osg::WGS_84_RADIUS_EQUATOR) + hScale * hRng[0],
 			static_cast<float>(osg::WGS_84_RADIUS_EQUATOR) + hScale * hRng[1]);

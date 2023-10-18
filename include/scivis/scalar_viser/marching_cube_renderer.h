@@ -14,8 +14,6 @@
 #include <osg/Geometry>
 #include <osg/Texture3D>
 
-#include <scivis/common/callback.h>
-
 #include "marching_cube_table.h"
 
 namespace SciVis
@@ -65,8 +63,8 @@ namespace SciVis
 
 				osg::ref_ptr<osg::Geometry> geom;
 				osg::ref_ptr<osg::Geode> geode;
-				std::array<osg::ref_ptr<osg::Vec3Array>, 2> vertsBuf;
-				std::array<osg::ref_ptr<osg::Vec3Array>, 2> normsBuf;
+				osg::ref_ptr<osg::Vec3Array> verts;
+				osg::ref_ptr<osg::Vec3Array> norms;
 
 			private:
 				/*
@@ -77,13 +75,13 @@ namespace SciVis
 				{
 					rndrVertsBufIdx = (rndrVertsBufIdx + 1) & 1;
 
-					geom->setVertexArray(vertsBuf[rndrVertsBufIdx]);
-					geom->setNormalArray(normsBuf[rndrVertsBufIdx]);
+					geom->setVertexArray(verts);
+					geom->setNormalArray(norms);
 					geom->setNormalBinding(osg::Geometry::BIND_PER_VERTEX);
 
 					geom->getPrimitiveSetList().clear();
-					geom->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::TRIANGLES, 0,
-						vertsBuf[rndrVertsBufIdx]->size()));
+					geom->addPrimitiveSet(new osg::DrawArrays(
+						osg::PrimitiveSet::TRIANGLES, 0, verts->size()));
 				}
 
 			public:
@@ -104,10 +102,8 @@ namespace SciVis
 
 					voxSz = osg::Vec3(1.f / volDim[0], 1.f / volDim[1], 1.f / volDim[2]);
 
-					vertsBuf[0] = new osg::Vec3Array;
-					vertsBuf[1] = new osg::Vec3Array;
-					normsBuf[0] = new osg::Vec3Array;
-					normsBuf[1] = new osg::Vec3Array;
+					verts = new osg::Vec3Array;
+					norms = new osg::Vec3Array;
 
 					geom = new osg::Geometry;
 					geode = new osg::Geode;
@@ -119,8 +115,7 @@ namespace SciVis
 					states->setAttributeAndModes(cf);
 
 					states->setMode(GL_DEPTH_TEST, osg::StateAttribute::ON);
-					states->setMode(GL_LIGHTING, osg::StateAttribute::ON);
-					//states->setAttributeAndModes(renderer->program, osg::StateAttribute::ON);
+					states->setAttributeAndModes(renderer->program, osg::StateAttribute::ON);
 				}
 				/*
 				* º¯Êý: SetLongtituteRange
@@ -242,12 +237,10 @@ namespace SciVis
 
 					auto vertNum = std::accumulate(voxVertNums.begin(), voxVertNums.end(), 0);
 
-					auto cmptVerts = vertsBuf[(rndrVertsBufIdx + 1) & 1];
-					cmptVerts->clear();
-					cmptVerts->reserve(vertNum);
-					auto cmptNorms = normsBuf[(rndrVertsBufIdx + 1) & 1];
-					cmptNorms->clear();
-					cmptNorms->reserve(vertNum);
+					verts->clear();
+					verts->reserve(vertNum);
+					norms->clear();
+					norms->reserve(vertNum);
 
 					for (size_t i = 0; i < volDat->size(); ++i) {
 						if (voxVertNums[i] == 0)
@@ -315,20 +308,20 @@ namespace SciVis
 						};
 						for (uint32_t j = 0; j < voxVertNums[i]; j += 3) {
 							auto edge = TriangleTable[cubeIdx][j];
-							cmptVerts->push_back(vec3ToSphere(vertList[edge]));
+							verts->push_back(vec3ToSphere(vertList[edge]));
 							edge = TriangleTable[cubeIdx][j + 1];
-							cmptVerts->push_back(vec3ToSphere(vertList[edge]));
+							verts->push_back(vec3ToSphere(vertList[edge]));
 							edge = TriangleTable[cubeIdx][j + 2];
-							cmptVerts->push_back(vec3ToSphere(vertList[edge]));
+							verts->push_back(vec3ToSphere(vertList[edge]));
 
-							auto n = cmptVerts->size();
-							auto e0 = (*cmptVerts)[n - 2] - (*cmptVerts)[n - 3];
-							auto e1 = (*cmptVerts)[n - 1] - (*cmptVerts)[n - 3];
+							auto n = verts->size();
+							auto e0 = (*verts)[n - 2] - (*verts)[n - 3];
+							auto e1 = (*verts)[n - 1] - (*verts)[n - 3];
 							e0 = e0 ^ e1;
 							e0.normalize();
-							cmptNorms->push_back(e0);
-							cmptNorms->push_back(e0);
-							cmptNorms->push_back(e0);
+							norms->push_back(e0);
+							norms->push_back(e0);
+							norms->push_back(e0);
 						}
 					}
 
