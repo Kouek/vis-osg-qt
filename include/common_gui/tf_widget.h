@@ -309,6 +309,12 @@ public:
 		return tfDat[scalar];
 	}
 
+	const std::array<std::array<float, 4>, 256>& GetTransferFunctionColors()
+	{
+		updateTransferFunctionData();
+		return tfDat;
+	}
+
 signals:
 	void PointPicked(uint8_t scalar);
 	void PointPlaced(uint8_t fromScalar, uint8_t toScalar);

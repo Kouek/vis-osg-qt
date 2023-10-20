@@ -8,6 +8,7 @@
 #include <ui_main_window.h>
 
 #include <common_gui/tf_widget.h>
+#include <common_gui/heat_map_widget.h>
 
 #include <scivis/io/tf_io.h>
 #include <scivis/io/tf_osg_io.h>
@@ -25,6 +26,7 @@ class MainWindow : public QWidget
 private:
 	QString tfFilePath;
 	TransferFunctionWidget tfWdgt;
+	HeatMapWidget heatMapWdgt;
 	Ui::MainWindow ui;
 
 	std::shared_ptr<SciVis::ScalarViser::HeatMap3DRenderer> renderer;
@@ -38,16 +40,21 @@ public:
 		ui.setupUi(this);
 
 		ui.groupBox_TF->layout()->addWidget(&tfWdgt);
+		ui.groupBox_TF->layout()->addWidget(&heatMapWdgt);
 
 		connect(ui.pushButton_OpenTF, &QPushButton::clicked, this, &MainWindow::openTFFromFile);
 		connect(ui.pushButton_SaveTF, &QPushButton::clicked, this, &MainWindow::saveTFToFile);
 
 		connect(&tfWdgt, &TransferFunctionWidget::TransferFunctionChanged,
-			this, &MainWindow::updateRendererColorTable);
+			[&]() {
+				updateRendererColorTable();
+				updateHeatMapWidget();
+			});
 
 		connect(ui.horizontalSlider_HeatMapH, &QSlider::valueChanged, [&](int val) {
 			ui.label_HeatMapH->setText(QString::number(val));
 			updateRendererHeight();
+			updateHeatMapWidget();
 			});
 	}
 
@@ -76,6 +83,11 @@ public:
 		ui.horizontalSlider_HeatMapH->setValue(static_cast<int>(floorf(h)));
 	}
 
+	void SetVolume(std::shared_ptr<std::vector<float>> volDat, const std::array<uint32_t, 3>& dim)
+	{
+		heatMapWdgt.SetVolume(volDat, dim);
+	}
+
 private:
 	void openTFFromFile()
 	{
@@ -96,6 +108,7 @@ private:
 		tfWdgt.SetTransferFunctionPointsData(pnts);
 
 		updateRendererColorTable();
+		updateHeatMapWidget();
 	}
 
 	void saveTFToFile()
@@ -117,6 +130,16 @@ private:
 		auto& vols = renderer->GetVolumes();
 		for (auto itr = vols.begin(); itr != vols.end(); ++itr)
 			itr->second.SetColorTable(tex);
+	}
+
+	void updateHeatMapWidget()
+	{
+		uint32_t volZ =
+			static_cast<float>(ui.horizontalSlider_HeatMapH->value() - ui.horizontalSlider_HeatMapH->minimum())
+			/ (ui.horizontalSlider_HeatMapH->maximum() - ui.horizontalSlider_HeatMapH->minimum())
+			* heatMapWdgt.GetDimension()[2];
+		volZ = std::min(volZ, heatMapWdgt.GetDimension()[2] - 1);
+		heatMapWdgt.Update(tfWdgt.GetTransferFunctionColors(), volZ);
 	}
 };
 

@@ -2,6 +2,7 @@
 #define SCIVIS_SCALAR_VISER_MCR_H
 
 #include <algorithm>
+#include <memory>
 #include <numeric>
 #include <string>
 
@@ -50,7 +51,6 @@ namespace SciVis
 			class PerVolParam
 			{
 			private:
-				uint8_t rndrVertsBufIdx;
 				std::array<uint32_t, 3> volDim;
 				osg::Vec3 voxSz;
 				float isoVal;
@@ -66,28 +66,10 @@ namespace SciVis
 				osg::ref_ptr<osg::Vec3Array> verts;
 				osg::ref_ptr<osg::Vec3Array> norms;
 
-			private:
-				/*
-				* 函数: swapVertsBuf
-				* 功能: 在双缓冲中切换绘制缓冲与计算缓冲
-				*/
-				void swapVertsBuf()
-				{
-					rndrVertsBufIdx = (rndrVertsBufIdx + 1) & 1;
-
-					geom->setVertexArray(verts);
-					geom->setNormalArray(norms);
-					geom->setNormalBinding(osg::Geometry::BIND_PER_VERTEX);
-
-					geom->getPrimitiveSetList().clear();
-					geom->addPrimitiveSet(new osg::DrawArrays(
-						osg::PrimitiveSet::TRIANGLES, 0, verts->size()));
-				}
-
 			public:
 				PerVolParam(decltype(volDat) volDat, const std::array<uint32_t, 3>& volDim,
 					PerRendererParam* renderer)
-					: volDat(volDat), volDim(volDim), rndrVertsBufIdx(0)
+					: volDat(volDat), volDim(volDim)
 				{
 					const auto MinHeight = static_cast<float>(osg::WGS_84_RADIUS_EQUATOR) * 1.1f;
 					const auto MaxHeight = static_cast<float>(osg::WGS_84_RADIUS_EQUATOR) * 1.3f;
@@ -325,7 +307,13 @@ namespace SciVis
 						}
 					}
 
-					swapVertsBuf();
+					geom->setVertexArray(verts);
+					geom->setNormalArray(norms);
+					geom->setNormalBinding(osg::Geometry::BIND_PER_VERTEX);
+
+					geom->getPrimitiveSetList().clear();
+					geom->addPrimitiveSet(new osg::DrawArrays(
+						osg::PrimitiveSet::TRIANGLES, 0, verts->size()));
 				}
 				float GetIsosurfaceValue() const
 				{
@@ -367,9 +355,9 @@ namespace SciVis
 					param.grp->removeChild(itr->second.geode);
 					vols.erase(itr);
 				}
-				vols.emplace(std::pair<std::string, PerVolParam>
+				auto opt = vols.emplace(std::pair<std::string, PerVolParam>
 					(name, PerVolParam(volDat, volDim, &param)));
-				param.grp->addChild(vols.at(name).geode);
+				param.grp->addChild(opt.first->second.geode);
 			}
 			/*
 			* 函数: GetVolumes

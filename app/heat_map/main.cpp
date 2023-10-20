@@ -9,8 +9,6 @@
 
 #include <common/osg.h>
 
-#include <common_gui/heat_map_widget.h>
-
 #include <scivis/io/tf_io.h>
 #include <scivis/io/tf_osg_io.h>
 #include <scivis/io/vol_io.h>
@@ -45,8 +43,6 @@ int main(int argc, char** argv)
 
 	MainWindow mainWnd(hmp);
 	mainWnd.show();
-	HeatMapWidget hmpWdgt;
-	hmpWdgt.show();
 
 	auto tfTex = mainWnd.GetTFTexture();
 
@@ -71,6 +67,9 @@ int main(int argc, char** argv)
 		vol->SetHeightFromCenter(.5f * (
 			static_cast<float>(osg::WGS_84_RADIUS_EQUATOR) + hScale * hRng[0] +
 			static_cast<float>(osg::WGS_84_RADIUS_EQUATOR) + hScale * hRng[1]));
+
+		auto volDatShrd = std::make_shared<std::vector<float>>(volDat);
+		mainWnd.SetVolume(volDatShrd, dim);
 	}
 
 	mainWnd.UpdateFromRenderer();

@@ -57,7 +57,6 @@ int main(int argc, char** argv)
 		auto vol = mcb->GetVolume(volName);
 		vol->SetLongtituteRange(lonRng[0], lonRng[1]);
 		vol->SetLatituteRange(latRng[0], latRng[1]);
-		vol->SetHeightFromCenterRange(.7f, .75f);
 		vol->SetHeightFromCenterRange(
 			static_cast<float>(osg::WGS_84_RADIUS_EQUATOR) + hScale * hRng[0],
 			static_cast<float>(osg::WGS_84_RADIUS_EQUATOR) + hScale * hRng[1]);
