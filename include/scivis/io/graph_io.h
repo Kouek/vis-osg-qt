@@ -193,6 +193,9 @@ namespace SciVis
 						v1Index++;
 						v2Index++;
 
+						if (v1Index >= subdivs.size() || v2Index >= subdivs.size())
+							break;
+
 						if (v1Index >= 0)
 							v1 = subdivs[v1Index];
 						if (v2Index < oldSubdivsNum)

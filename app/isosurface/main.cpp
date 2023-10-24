@@ -22,7 +22,7 @@ static const std::string volName = "0";
 static const std::array<uint32_t, 3> dim = { 300, 350, 50 };
 static const std::array<uint8_t, 3> log2Dim = { 9, 9, 6 };
 static const std::array<float, 2> lonRng = { 100.05f, 129.95f };
-static const std::array<float, 2> latRng = { -4.95f, 29.95 };
+static const std::array<float, 2> latRng = { -4.95f, 29.95f };
 static const std::array<float, 2> hRng = { 1.f, 5316.f };
 static const float hScale = 100.f;
 

@@ -15,9 +15,9 @@ static const std::string edgesPath = DATA_PATH_PREFIX"network/edges.csv";
 static const std::string graphName = "network";
 static const std::array<uint32_t, 3> dim = { 300, 350, 50 };
 static const std::array<uint8_t, 3> log2Dim = { 9, 9, 6 };
-static const std::array<float, 2> lonRng = { 100.05f, 129.95f };
-static const std::array<float, 2> latRng = { -4.95f, 29.95 };
-static const std::array<float, 2> hRng = { 1.f, 5316.f };
+static const std::array<float, 2> lonRng = { -30.f, 30.f };
+static const std::array<float, 2> latRng = { -30.f, 30.f };
+static const std::array<float, 2> hRng = { 5000.f, 10000.f };
 static const float hScale = 100.f;
 
 static SciVis::GraphViser::Graph graph;
@@ -29,6 +29,12 @@ static void initGraph()
 	auto edges = fm.ReadGraphEdges(nodesPath, edgesPath);
 
 	graph.Set(nodes, edges);
+
+	graph.SetAlgorithmParams(0.1, 6, 10, 0.6, 30);
+	graph.SetNetworkParams(-1.0, -1.0);
+	SciVis::Vec2D gravitationCenter;
+	gravitationCenter.set(0.0, 0.0);
+	graph.SetPhysicsParams(0.3, 1e-4, gravitationCenter, -2.0);
 
 	do {
 		while (graph.Iterate() > 0);
@@ -57,16 +63,19 @@ int main(int argc, char** argv)
 		initGraph();
 		for (auto itr = graph.GetNodes().begin(); itr != graph.GetNodes().end(); ++itr)
 			nodes->emplace(std::make_pair(
-				itr->first, osg::Vec3(itr->second.pos.X(), itr->second.pos.Y(), 0.f)));
+				itr->first, osg::Vec3(itr->second.pos.X(), itr->second.pos.Y(), 1.f)));
 		for (auto itr = graph.GetEdges().begin(); itr != graph.GetEdges().end(); ++itr)
 			edges->emplace_back(std::array<std::string, 2>{itr->sourceLabel, itr->targetLabel});
 
 		renderer->AddGraph(graphName, nodes, edges);
-		
+
 		auto graph = renderer->GetGraph(graphName);
 		graph->SetLongtituteRange(lonRng[0], lonRng[1]);
 		graph->SetLatituteRange(latRng[0], latRng[1]);
-		graph->SetHeightFromCenterRange(hRng[0], hRng[1]);
+		graph->SetHeightFromCenterRange(
+			static_cast<float>(osg::WGS_84_RADIUS_EQUATOR) + hScale * hRng[0],
+			static_cast<float>(osg::WGS_84_RADIUS_EQUATOR) + hScale * hRng[1]);
+		graph->SetNodeGeometrySize(.02f * static_cast<float>(osg::WGS_84_RADIUS_EQUATOR));
 
 		graph->Update();
 	}

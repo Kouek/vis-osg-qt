@@ -12,6 +12,9 @@
 
 #include <osg/CullFace>
 #include <osg/CoordinateSystemNode>
+#include <osg/Geometry>
+#include <osg/Geode>
+#include <osg/LineWidth>
 
 namespace SciVis
 {
@@ -38,6 +41,7 @@ namespace SciVis
 				float minLongtitute, maxLongtitute;
 				float minLatitute, maxLatitute;
 				float minHeight, maxHeight;
+				float nodeGeomSize;
 				bool volStartFromLonZero;
 
 				std::shared_ptr<std::map<std::string, osg::Vec3>> nodes;
@@ -67,14 +71,16 @@ namespace SciVis
 				}
 				void Update()
 				{
+					grp->removeChildren(0, grp->getNumChildren());
+
 					osg::Vec3 minPos(
 						std::numeric_limits<float>::max(),
 						std::numeric_limits<float>::max(),
 						std::numeric_limits<float>::max());
 					osg::Vec3 maxPos(
-						std::numeric_limits<float>::min(),
-						std::numeric_limits<float>::min(),
-						std::numeric_limits<float>::min());
+						std::numeric_limits<float>::lowest(),
+						std::numeric_limits<float>::lowest(),
+						std::numeric_limits<float>::lowest());
 					auto minMax = [&](const osg::Vec3& p) {
 						if (minPos.x() > p.x())
 							minPos.x() = p.x();
@@ -111,21 +117,64 @@ namespace SciVis
 
 					for (auto itr = nodes->begin(); itr != nodes->end(); ++itr)
 						minMax(itr->second);
-
-					grp->removeChildren(0, grp->getNumChildren());
 					auto dltPos = maxPos - minPos;
+
 					auto tessl = new osg::TessellationHints;
-					tessl->setDetailRatio(4.f);
+					tessl->setDetailRatio(1.f);
+					std::map<std::string, osg::ShapeDrawable*> osgNodes;
 					for (auto itr = nodes->begin(); itr != nodes->end(); ++itr) {
 						auto p = itr->second - minPos;
-						p.x() /= dltPos.x();
-						p.y() /= dltPos.y();
-						p.z() /= dltPos.z();
+						p.x() = dltPos.x() == 0.f ? p.x() : p.x() / dltPos.x();
+						p.y() = dltPos.y() == 0.f ? p.y() : p.y() / dltPos.y();
+						p.z() = dltPos.z() == 0.f ? p.z() : p.z() / dltPos.z();
+
+						osg::Vec4 color(p.x(), p.y(), p.z(), 1.f);
+
 						p = vec3ToSphere(p);
 
-						auto sphere = new osg::ShapeDrawable(new osg::Sphere(p, 10.f), tessl);
+						auto sphere = new osg::ShapeDrawable(
+							new osg::Sphere(p, .5f * nodeGeomSize), tessl);
+						sphere->setColor(color);
+
 						grp->addChild(sphere);
+						osgNodes.emplace(std::make_pair(itr->first, sphere));
 					}
+
+					auto segVerts = new osg::Vec3Array;
+					auto segCols = new osg::Vec4Array;
+					for (auto& edge : *edges) {
+						auto node0 = osgNodes.find(edge[0]);
+						auto node1 = osgNodes.find(edge[1]);
+						if (node0 == osgNodes.end() || node1 == osgNodes.end()) continue;
+
+						auto sphere0 = reinterpret_cast<osg::Sphere*>(node0->second->getShape());
+						auto sphere1 = reinterpret_cast<osg::Sphere*>(node1->second->getShape());
+						segVerts->push_back(sphere0->getCenter());
+						segVerts->push_back(sphere1->getCenter());
+
+						segCols->push_back(node0->second->getColor() * .75f);
+						segCols->push_back(node1->second->getColor() * .75f);
+					}
+
+					auto geom = new osg::Geometry;
+					{
+						geom->setVertexArray(segVerts);
+						geom->setColorArray(segCols);
+						geom->setColorBinding(osg::Geometry::BIND_PER_VERTEX);
+						
+						auto states = geom->getOrCreateStateSet();
+						states->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
+						auto lw = new osg::LineWidth(.01f);
+						states->setAttribute(lw, osg::StateAttribute::ON);
+
+						geom->addPrimitiveSet(new osg::DrawArrays(
+							osg::PrimitiveSet::LINES, 0, segVerts->size()));
+					}
+
+					auto geode = new osg::Geode;
+					geode->addDrawable(geom);
+
+					grp->addChild(geode);
 				}
 				bool SetLongtituteRange(float minLonDeg, float maxLonDeg)
 				{
@@ -156,9 +205,13 @@ namespace SciVis
 					maxHeight = maxH;
 					return true;
 				}
-				void SetVolumeStartFromLongtituteZero(bool flag)
+				void SetGraphStartFromLongtituteZero(bool flag)
 				{
 					volStartFromLonZero = flag;
+				}
+				void SetNodeGeometrySize(float sz)
+				{
+					nodeGeomSize = sz;
 				}
 
 			private:
