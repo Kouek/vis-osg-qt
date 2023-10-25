@@ -14,7 +14,8 @@ namespace SciVis
 		{
 		public:
 			static osg::ref_ptr<osg::Texture1D> ToTexture(
-				const std::vector<std::pair<uint8_t, std::array<float, 4>>>& tfPnts) {
+				const std::vector<std::pair<uint8_t,
+				std::array<float, 4>>>& tfPnts) {
 				osg::ref_ptr<osg::Image> img = new osg::Image;
 				img->allocateImage(256, 1, 1, GL_RGBA, GL_FLOAT);
 				img->setInternalTextureFormat(GL_RGBA);
@@ -49,8 +50,8 @@ namespace SciVis
 
 				osg::ref_ptr<osg::Texture1D> tex = new osg::Texture1D;
 				tex->setFilter(osg::Texture::MAG_FILTER, osg::Texture::FilterMode::LINEAR);
-				tex->setFilter(osg::Texture::MIN_FILTER, osg::Texture::FilterMode::NEAREST);
-				tex->setWrap(osg::Texture::WRAP_S, osg::Texture::WrapMode::CLAMP);
+				tex->setFilter(osg::Texture::MIN_FILTER, osg::Texture::FilterMode::LINEAR);
+				tex->setWrap(osg::Texture::WRAP_S, osg::Texture::WrapMode::CLAMP_TO_EDGE);
 				tex->setInternalFormatMode(osg::Texture::InternalFormatMode::USE_IMAGE_DATA_FORMAT);
 				tex->setImage(img);
 

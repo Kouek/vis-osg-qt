@@ -54,7 +54,7 @@ int main(int argc, char** argv)
 
 		auto volDat = SciVis::Convertor::RAWVolume::U8ToNormalizedFloat(volU8Dat);
 		auto volTex = SciVis::OSGConvertor::RAWVolume::
-			NormalizedFloatToTexture(volDat, dim, log2Dim);
+			NormalizedFloatToTexture(volDat, dim, log2Dim, osg::Texture::NEAREST);
 
 		hmp->AddVolume(volName, volTex, tfTex);
 

@@ -35,7 +35,7 @@ public:
 	MainWindow(
 		std::shared_ptr<SciVis::ScalarViser::HeatMap3DRenderer> renderer,
 		QWidget* parent = nullptr)
-		: QWidget(parent), renderer(renderer)
+		: QWidget(parent), renderer(renderer), heatMapWdgt(500, 500)
 	{
 		ui.setupUi(this);
 

@@ -16,7 +16,8 @@ namespace SciVis
 			static osg::ref_ptr<osg::Texture3D> NormalizedFloatToTexture(
 				const std::vector<float>& dat,
 				const std::array<uint32_t, 3>& srcDim,
-				const std::array<uint8_t, 3>& logDstDim)
+				const std::array<uint8_t, 3>& logDstDim,
+				osg::Texture::FilterMode filterMode = osg::Texture::LINEAR)
 			{
 				std::array<int, 3> dstDim = { 1 << logDstDim[0], 1 << logDstDim[1], 1 << logDstDim[2] };
 				std::array<float, 3> scaleDst2Src = { static_cast<float>(srcDim[0] - 1) / (dstDim[0] - 1),
@@ -70,11 +71,11 @@ namespace SciVis
 						}
 
 				osg::ref_ptr<osg::Texture3D> tex = new osg::Texture3D;
-				tex->setFilter(osg::Texture::MAG_FILTER, osg::Texture::FilterMode::LINEAR);
-				tex->setFilter(osg::Texture::MIN_FILTER, osg::Texture::FilterMode::LINEAR);
-				tex->setWrap(osg::Texture::WRAP_S, osg::Texture::WrapMode::CLAMP);
-				tex->setWrap(osg::Texture::WRAP_T, osg::Texture::WrapMode::CLAMP);
-				tex->setWrap(osg::Texture::WRAP_R, osg::Texture::WrapMode::CLAMP);
+				tex->setFilter(osg::Texture::MAG_FILTER, filterMode);
+				tex->setFilter(osg::Texture::MIN_FILTER, filterMode);
+				tex->setWrap(osg::Texture::WRAP_S, osg::Texture::WrapMode::CLAMP_TO_EDGE);
+				tex->setWrap(osg::Texture::WRAP_T, osg::Texture::WrapMode::CLAMP_TO_EDGE);
+				tex->setWrap(osg::Texture::WRAP_R, osg::Texture::WrapMode::CLAMP_TO_EDGE);
 				tex->setInternalFormatMode(osg::Texture::InternalFormatMode::USE_IMAGE_DATA_FORMAT);
 				tex->setImage(img);
 

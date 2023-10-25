@@ -15,11 +15,25 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
-    <widget class="QLabel" name="label_HeatMap">
-     <property name="text">
-      <string/>
-     </property>
-    </widget>
+    <layout class="QHBoxLayout" name="horizontalLayout" stretch="1,2">
+     <item>
+      <widget class="QLabel" name="label">
+       <property name="text">
+        <string>当前标量</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="label_HeatMapPoint">
+       <property name="text">
+        <string>__</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignCenter</set>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </item>
   </layout>
  </widget>
