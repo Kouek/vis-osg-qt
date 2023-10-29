@@ -12,7 +12,7 @@
 
 #include <scivis/io/tf_io.h>
 #include <scivis/io/tf_osg_io.h>
-#include <scivis/scalar_viser/marching_cube_renderer.h>
+#include <scivis/scalar_viser/marching_square_renderer.h>
 
 namespace Ui
 {
@@ -32,14 +32,16 @@ private:
 		QLabel* label_MaxVal;
 		QSlider* slider_Val;
 
-		SciVis::ScalarViser::MarchingCubeCPURenderer* renderer;
+		SciVis::ScalarViser::MarchingSquareCPURenderer* renderer;
+		std::vector<float>* heights;
 
 	public:
 		IsoValWidget(
 			uint8_t defIsoVal,
-			SciVis::ScalarViser::MarchingCubeCPURenderer* renderer,
+			SciVis::ScalarViser::MarchingSquareCPURenderer* renderer,
+			std::vector<float>* heights,
 			QWidget* parent = nullptr)
-			: QWidget(parent), renderer(renderer)
+			: QWidget(parent), renderer(renderer), heights(heights)
 		{
 			label_Val = new QLabel(QString::number(static_cast<uint>(defIsoVal)));
 			label_MinVal = new QLabel(QString::number(0));
@@ -64,7 +66,7 @@ private:
 				});
 			connect(slider_Val, &QSlider::valueChanged, [&](int val) {
 				auto bgn = this->renderer->GetVolumes().begin();
-				bgn->second.MarchingCube(val / 255.f);
+				bgn->second.MarchingSquare(val / 255.f, *(this->heights));
 				});
 		}
 	};
@@ -74,13 +76,15 @@ private:
 	QString tfFilePath;
 	Ui::MainWindow ui;
 
-	std::shared_ptr<SciVis::ScalarViser::MarchingCubeCPURenderer> renderer;
+	std::shared_ptr<SciVis::ScalarViser::MarchingSquareCPURenderer> renderer;
+	std::shared_ptr<std::vector<float>> heights;
 
 public:
 	MainWindow(
-		std::shared_ptr<SciVis::ScalarViser::MarchingCubeCPURenderer> renderer,
+		std::shared_ptr<SciVis::ScalarViser::MarchingSquareCPURenderer> renderer,
+		std::shared_ptr<std::vector<float>> heights,
 		QWidget* parent = nullptr)
-		: QWidget(parent), renderer(renderer)
+		: QWidget(parent), renderer(renderer), heights(heights)
 	{
 		ui.setupUi(this);
 
@@ -95,7 +99,7 @@ public:
 		auto bgn = renderer->GetVolumes().begin();
 		auto isoValWdgt = new IsoValWidget(
 			static_cast<uint8_t>(255.f * bgn->second.GetIsosurfaceValue()),
-			renderer.get());
+			renderer.get(), heights.get());
 		isoValsLayout->addWidget(isoValWdgt);
 	}
 

@@ -164,7 +164,7 @@ namespace SciVis
 				}
 				/*
 				* 函数: MarchingCube
-				* 功能: 在CPU端执行Marching Cube算法，产生等值面。预留双缓冲接口，后期可加入多线程Marching Cube或并行Marching Cube。
+				* 功能: 在CPU端执行Marching Cube算法，产生等值面
 				* 参数:
 				* -- isoVal: 产生等值面依据的标量值
 				*/
