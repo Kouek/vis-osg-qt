@@ -3,6 +3,7 @@
 
 #include <fstream>
 
+#include <array>
 #include <vector>
 
 namespace SciVis

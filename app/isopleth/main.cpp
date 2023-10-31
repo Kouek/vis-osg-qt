@@ -44,7 +44,7 @@ int main(int argc, char** argv)
 	std::shared_ptr<std::vector<float>> heights
 		= std::make_shared<std::vector<float>>();
 
-	MainWindow mainWnd(mcb, heights);
+	MainWindow mainWnd(mcb);
 	mainWnd.show();
 
 	std::string errMsg;
@@ -71,6 +71,8 @@ int main(int argc, char** argv)
 			heights->emplace_back(h);
 		}
 		vol->MarchingSquare(30.f / 255.f, *heights);
+
+		mainWnd.SetVolumeAndHeights(volDatShrd, dim, heights);
 	}
 
 	mainWnd.UpdateFromRenderer();

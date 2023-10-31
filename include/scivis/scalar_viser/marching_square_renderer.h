@@ -356,9 +356,14 @@ namespace SciVis
 					geom->addPrimitiveSet(new osg::DrawArrays(
 						osg::PrimitiveSet::TRIANGLES, 0, verts->size()));
 				}
-				float GetIsosurfaceValue() const
+				float GetIsoplethValue() const
 				{
 					return isoVal;
+				}
+				std::array<float, 2> GetHeightFromCenterRange() const
+				{
+					std::array<float, 2> ret = { minHeight, maxHeight };
+					return ret;
 				}
 
 			private:

@@ -8,7 +8,8 @@
 
 #include <ui_main_window.h>
 
-#include <common_gui/tf_widget.h>
+#include <common_gui/isopleth_widget.h>
+#include <common_gui/slider_val_widget.h>
 
 #include <scivis/io/tf_io.h>
 #include <scivis/io/tf_osg_io.h>
@@ -24,57 +25,12 @@ class MainWindow : public QWidget
 	Q_OBJECT
 
 private:
-	class IsoValWidget : public QWidget
-	{
-	private:
-		QLabel* label_Val;
-		QLabel* label_MinVal;
-		QLabel* label_MaxVal;
-		QSlider* slider_Val;
-
-		SciVis::ScalarViser::MarchingSquareCPURenderer* renderer;
-		std::vector<float>* heights;
-
-	public:
-		IsoValWidget(
-			uint8_t defIsoVal,
-			SciVis::ScalarViser::MarchingSquareCPURenderer* renderer,
-			std::vector<float>* heights,
-			QWidget* parent = nullptr)
-			: QWidget(parent), renderer(renderer), heights(heights)
-		{
-			label_Val = new QLabel(QString::number(static_cast<uint>(defIsoVal)));
-			label_MinVal = new QLabel(QString::number(0));
-			label_MaxVal = new QLabel(QString::number(255));
-			slider_Val = new QSlider(Qt::Horizontal);
-			slider_Val->setRange(0, 255);
-			slider_Val->setValue(defIsoVal);
-			slider_Val->setTracking(false);
-
-			setLayout(new QVBoxLayout);
-			layout()->addWidget(label_Val);
-			{
-				auto hLayout = new QHBoxLayout;
-				hLayout->addWidget(label_MinVal);
-				hLayout->addWidget(slider_Val);
-				hLayout->addWidget(label_MaxVal);
-				dynamic_cast<QVBoxLayout*>(layout())->addLayout(hLayout);
-			}
-
-			connect(slider_Val, &QSlider::sliderMoved, [&](int val) {
-				label_Val->setText(QString::number(val));
-				});
-			connect(slider_Val, &QSlider::valueChanged, [&](int val) {
-				auto bgn = this->renderer->GetVolumes().begin();
-				bgn->second.MarchingSquare(val / 255.f, *(this->heights));
-				});
-		}
-	};
-
-	QLayout* isoValsLayout;
+	SliderValWidget isoValWdgt;
 
 	QString tfFilePath;
 	Ui::MainWindow ui;
+
+	IsoplethWidget isoplethWdgt;
 
 	std::shared_ptr<SciVis::ScalarViser::MarchingSquareCPURenderer> renderer;
 	std::shared_ptr<std::vector<float>> heights;
@@ -82,14 +38,24 @@ private:
 public:
 	MainWindow(
 		std::shared_ptr<SciVis::ScalarViser::MarchingSquareCPURenderer> renderer,
-		std::shared_ptr<std::vector<float>> heights,
 		QWidget* parent = nullptr)
-		: QWidget(parent), renderer(renderer), heights(heights)
+		: QWidget(parent), isoplethWdgt(500, 500), renderer(renderer)
 	{
 		ui.setupUi(this);
 
-		ui.groupBox_Isosurface->setLayout(new QHBoxLayout);
-		isoValsLayout = ui.groupBox_Isosurface->layout();
+		ui.groupBox_IsoVal->setLayout(new QVBoxLayout);
+		ui.groupBox_IsoVal->layout()->addWidget(&isoValWdgt);
+
+		ui.groupBox_Render->layout()->addWidget(&isoplethWdgt);
+
+		connect(ui.horizontalSlider_IsoplethH, &QSlider::sliderMoved, [&](int val) {
+			ui.label_IsoplethH->setText(QString::number(val));
+			});
+		connect(ui.horizontalSlider_IsoplethH, &QSlider::valueChanged, this, &MainWindow::updateIsoplethWidget);
+		connect(&isoValWdgt, &SliderValWidget::ValueChanged, [&](int val) {
+			updateRenderer();
+			updateIsoplethWidget();
+			});
 	}
 
 	void UpdateFromRenderer()
@@ -97,13 +63,47 @@ public:
 		if (renderer->GetVolumeNum() == 0) return;
 
 		auto bgn = renderer->GetVolumes().begin();
-		auto isoValWdgt = new IsoValWidget(
-			static_cast<uint8_t>(255.f * bgn->second.GetIsosurfaceValue()),
-			renderer.get(), heights.get());
-		isoValsLayout->addWidget(isoValWdgt);
+		auto hRng = bgn->second.GetHeightFromCenterRange();
+
+		ui.label_MinH->setText(QString::number(static_cast<int>(floorf(hRng[0]))));
+		ui.label_MaxH->setText(QString::number(static_cast<int>(floorf(hRng[1]))));
+		ui.label_IsoplethH->setText(QString::number(0));
+
+		ui.horizontalSlider_IsoplethH->setRange(
+			static_cast<int>(floorf(hRng[0])),
+			static_cast<int>(floorf(hRng[1])));
+		ui.horizontalSlider_IsoplethH->setValue(static_cast<int>(floorf(hRng[0])));
+
+		isoValWdgt.Set(
+			static_cast<int>(255.f * bgn->second.GetIsoplethValue()),
+			0, 255);
+
+		updateIsoplethWidget();
+	}
+
+	void SetVolumeAndHeights(
+		std::shared_ptr<std::vector<float>> volDat, const std::array<uint32_t, 3>& dim,
+		std::shared_ptr<std::vector<float>> heights)
+	{
+		this->heights = heights;
+		isoplethWdgt.SetVolume(volDat, dim);
 	}
 
 private:
+	void updateRenderer()
+	{
+		auto bgn = renderer->GetVolumes().begin();
+		bgn->second.MarchingSquare(isoValWdgt.GetValue() / 255.f, *heights);
+	}
+	void updateIsoplethWidget()
+	{
+		uint32_t volZ =
+			static_cast<float>(ui.horizontalSlider_IsoplethH->value() - ui.horizontalSlider_IsoplethH->minimum())
+			/ (ui.horizontalSlider_IsoplethH->maximum() - ui.horizontalSlider_IsoplethH->minimum())
+			* isoplethWdgt.GetDimension()[2];
+		volZ = std::min(volZ, isoplethWdgt.GetDimension()[2] - 1);
+		isoplethWdgt.Update(isoValWdgt.GetValue() / 255.f, volZ);
+	}
 };
 
 #endif // !DIRECT_VOLUME_RENDER_MAIN_WINDOW_H

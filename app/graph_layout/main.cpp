@@ -30,11 +30,11 @@ static void initGraph()
 
 	graph.Set(nodes, edges);
 
-	graph.SetAlgorithmParams(0.1, 6, 10, 0.6, 30);
+	graph.SetAlgorithmParams(0.1, 5, 90, 0.6, 3);
 	graph.SetNetworkParams(-1.0, -1.0);
 	SciVis::Vec2D gravitationCenter;
 	gravitationCenter.set(0.0, 0.0);
-	graph.SetPhysicsParams(0.3, 1e-4, gravitationCenter, -2.0);
+	graph.SetPhysicsParams(0.4, 1e-4, gravitationCenter, 1.0);
 
 	do {
 		while (graph.Iterate() > 0);
