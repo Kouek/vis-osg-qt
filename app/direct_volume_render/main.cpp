@@ -109,6 +109,8 @@ int main(int argc, char** argv)
 			static_cast<float>(osg::WGS_84_RADIUS_EQUATOR) + hScale * hRng[1]);
 	}
 
+	mainWnd.UpdateFromRenderer();
+
 	dvr->DisplayVolume(volNames[0]);
 	dvr->GetGroup()->addEventCallback(new DVRSwitchVolumeCallback(dvr));
 	grp->addChild(dvr->GetGroup());

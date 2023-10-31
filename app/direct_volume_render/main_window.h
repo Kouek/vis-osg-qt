@@ -98,6 +98,52 @@ public:
 		connect(ui.doubleSpinBox_SliceDirZ,
 			static_cast<void(QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged),
 			this, &MainWindow::updateSlice);
+
+		connect(ui.checkBox_UseShading, &QCheckBox::stateChanged, [&](int state) {
+			if (state == Qt::Checked) {
+				ui.doubleSpinBox_Ka->setEnabled(true);
+				ui.doubleSpinBox_Kd->setEnabled(true);
+				ui.doubleSpinBox_Ks->setEnabled(true);
+				ui.doubleSpinBox_Shininess->setEnabled(true);
+				ui.doubleSpinBox_LightPosLon->setEnabled(true);
+				ui.doubleSpinBox_LightPosLat->setEnabled(true);
+				ui.doubleSpinBox_LightPosH->setEnabled(true);
+
+				updateRenderer();
+			}
+			else {
+				ui.doubleSpinBox_Ka->setEnabled(false);
+				ui.doubleSpinBox_Kd->setEnabled(false);
+				ui.doubleSpinBox_Ks->setEnabled(false);
+				ui.doubleSpinBox_Shininess->setEnabled(false);
+				ui.doubleSpinBox_LightPosLon->setEnabled(false);
+				ui.doubleSpinBox_LightPosLat->setEnabled(false);
+				ui.doubleSpinBox_LightPosH->setEnabled(false);
+
+				updateRenderer();
+			}
+			});
+		connect(ui.doubleSpinBox_Ka,
+			static_cast<void(QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged),
+			this, &MainWindow::updateRenderer);
+		connect(ui.doubleSpinBox_Kd,
+			static_cast<void(QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged),
+			this, &MainWindow::updateRenderer);
+		connect(ui.doubleSpinBox_Ks,
+			static_cast<void(QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged),
+			this, &MainWindow::updateRenderer);
+		connect(ui.doubleSpinBox_Shininess,
+			static_cast<void(QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged),
+			this, &MainWindow::updateRenderer);
+		connect(ui.doubleSpinBox_LightPosLon,
+			static_cast<void(QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged),
+			this, &MainWindow::updateRenderer);
+		connect(ui.doubleSpinBox_LightPosLat,
+			static_cast<void(QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged),
+			this, &MainWindow::updateRenderer);
+		connect(ui.doubleSpinBox_LightPosH,
+			static_cast<void(QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged),
+			this, &MainWindow::updateRenderer);
 	}
 
 	osg::ref_ptr<osg::Texture1D> GetTFTexture() const
@@ -105,6 +151,41 @@ public:
 		auto tfPnts = tfWdgt.GetTransferFunctionPointsData();
 		auto tex = SciVis::OSGConvertor::TransferFunctionPoints::ToTexture(tfPnts);
 		return tex;
+	}
+
+	void UpdateFromRenderer()
+	{
+		if (renderer->GetVolumeNum() == 0) return;
+
+		auto bgn = renderer->GetVolumes().begin();
+		auto lonRng = bgn->second.GetLongtituteRange();
+		auto latRng = bgn->second.GetLatituteRange();
+		auto hRng = bgn->second.GetHeightFromCenterRange();
+		for (uint8_t i = 0; i < 2; ++i) {
+			lonRng[i] = rad2Deg(lonRng[i]);
+			latRng[i] = rad2Deg(latRng[i]);
+			hRng[i] = rad2Deg(hRng[i]);
+		}
+		lonRng[0] = std::max(lonRng[0] - 10.f, 0.f);
+		lonRng[1] = std::min(lonRng[1] + 10.f, 180.f);
+		latRng[0] = std::max(latRng[0] - 10.f, -90.f);
+		latRng[1] = std::min(latRng[1] + 10.f, +90.f);
+		hRng[1] *= 2.f;
+
+		ui.doubleSpinBox_LightPosLon->setMinimum(lonRng[0]);
+		ui.doubleSpinBox_LightPosLon->setMaximum(lonRng[1]);
+		ui.doubleSpinBox_LightPosLon->setValue(.5f * (lonRng[0] + lonRng[1]));
+		ui.doubleSpinBox_LightPosLon->setSingleStep(10.f);
+		
+		ui.doubleSpinBox_LightPosLat->setMinimum(latRng[0]);
+		ui.doubleSpinBox_LightPosLat->setMaximum(latRng[1]);
+		ui.doubleSpinBox_LightPosLat->setValue(.5f * (latRng[0] + latRng[1]));
+		ui.doubleSpinBox_LightPosLat->setSingleStep(10.f);
+		
+		ui.doubleSpinBox_LightPosH->setMinimum(hRng[0]);
+		ui.doubleSpinBox_LightPosH->setMaximum(hRng[1]);
+		ui.doubleSpinBox_LightPosH->setValue(.5f * (hRng[0] + hRng[1]));
+		ui.doubleSpinBox_LightPosH->setSingleStep(.1f * (hRng[1] - hRng[0]));
 	}
 
 private:
@@ -167,6 +248,33 @@ private:
 
 		renderer->SetDeltaT(ui.doubleSpinBox_DeltaT->value());
 		renderer->SetMaxStepCount(ui.spinBox_MaxStepCnt->value());
+
+		SciVis::ScalarViser::DirectVolumeRenderer::ShadingParam shadingParam;
+		shadingParam.useShading = ui.checkBox_UseShading->isChecked();
+		shadingParam.ka = ui.doubleSpinBox_Ka->value();
+		shadingParam.kd = ui.doubleSpinBox_Kd->value();
+		shadingParam.ks = ui.doubleSpinBox_Ks->value();
+		shadingParam.shininess = ui.doubleSpinBox_Shininess->value();
+		{
+			auto lon = deg2Rad(ui.doubleSpinBox_LightPosLon->value());
+			auto lat = deg2Rad(ui.doubleSpinBox_LightPosLat->value());
+			auto h = ui.doubleSpinBox_LightPosH->value();
+
+			shadingParam.lightPos.z() = h * sinf(lat);
+			h = h * cosf(lat);
+			shadingParam.lightPos.y() = h * sinf(lon);
+			shadingParam.lightPos.x() = h * cosf(lon);
+		}
+		renderer->SetShading(shadingParam);
+	}
+
+	float deg2Rad(float deg)
+	{
+		return deg * osg::PI / 180.f;
+	};
+	float rad2Deg(float rad)
+	{
+		return rad * 180.f / osg::PI;
 	}
 };
 

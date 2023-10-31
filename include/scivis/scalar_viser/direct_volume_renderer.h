@@ -20,6 +20,16 @@ namespace SciVis
 
 		class DirectVolumeRenderer
 		{
+		public:
+			struct ShadingParam {
+				bool useShading;
+				float ka;
+				float kd;
+				float ks;
+				float shininess;
+				osg::Vec3 lightPos;
+			};
+
 		private:
 			struct PerRendererParam
 			{
@@ -32,6 +42,13 @@ namespace SciVis
 				osg::ref_ptr<osg::Uniform> dt;
 				osg::ref_ptr<osg::Uniform> maxStepCnt;
 				osg::ref_ptr<osg::Uniform> useSlice;
+				
+				osg::ref_ptr<osg::Uniform> useShading;
+				osg::ref_ptr<osg::Uniform> ka;
+				osg::ref_ptr<osg::Uniform> kd;
+				osg::ref_ptr<osg::Uniform> ks;
+				osg::ref_ptr<osg::Uniform> shininess;
+				osg::ref_ptr<osg::Uniform> lightPos;
 
 				class Callback : public osg::NodeCallback
 				{
@@ -73,6 +90,13 @@ namespace SciVis
 					STATEMENT(useSlice, 0);
 					STATEMENT(sliceCntr, osg::Vec3());
 					STATEMENT(sliceDir, osg::Vec3());
+
+					STATEMENT(useShading, 0);
+					STATEMENT(ka, .5f);
+					STATEMENT(kd, .5f);
+					STATEMENT(ks, .5f);
+					STATEMENT(shininess, 16.f);
+					STATEMENT(lightPos, osg::Vec3());
 #undef STATEMENT
 
 					grp->setCullCallback(new Callback(eyePos));
@@ -91,6 +115,7 @@ namespace SciVis
 				osg::ref_ptr<osg::Uniform> minHeight;
 				osg::ref_ptr<osg::Uniform> maxHeight;
 				osg::ref_ptr<osg::Uniform> volStartFromZeroLon;
+				osg::ref_ptr<osg::Uniform> rotMat;
 
 				osg::ref_ptr<osg::ShapeDrawable> sphere;
 				osg::ref_ptr<osg::Texture3D> volTex;
@@ -118,6 +143,11 @@ namespace SciVis
 					STATEMENT(minHeight, MinHeight);
 					STATEMENT(maxHeight, MaxHeight);
 					STATEMENT(volStartFromZeroLon, 0);
+					{
+						osg::Matrix3 tmpMat;
+						tmpMat.makeIdentity();
+						STATEMENT(rotMat, tmpMat);
+					}
 #undef STATEMENT
 					states->addUniform(renderer->eyePos);
 					states->addUniform(renderer->dt);
@@ -125,6 +155,13 @@ namespace SciVis
 					states->addUniform(renderer->useSlice);
 					states->addUniform(renderer->sliceCntr);
 					states->addUniform(renderer->sliceDir);
+
+					states->addUniform(renderer->useShading);
+					states->addUniform(renderer->ka);
+					states->addUniform(renderer->kd);
+					states->addUniform(renderer->ks);
+					states->addUniform(renderer->shininess);
+					states->addUniform(renderer->lightPos);
 
 					states->setTextureAttributeAndModes(0, volTex, osg::StateAttribute::ON);
 					states->setTextureAttributeAndModes(1, tfTex, osg::StateAttribute::ON);
@@ -171,7 +208,16 @@ namespace SciVis
 
 					minLongtitute->set(deg2Rad(minLonDeg));
 					maxLongtitute->set(deg2Rad(maxLonDeg));
+
+					computeRotMat();
 					return true;
+				}
+				std::array<float, 2> GetLongtituteRange() const
+				{
+					std::array<float, 2> ret;
+					minLongtitute->get(ret[0]);
+					maxLongtitute->get(ret[1]);
+					return ret;
 				}
 				/*
 				* 函数: SetLatituteRange
@@ -189,7 +235,16 @@ namespace SciVis
 
 					minLatitute->set(deg2Rad(minLatDeg));
 					maxLatitute->set(deg2Rad(maxLatDeg));
+
+					computeRotMat();
 					return true;
+				}
+				std::array<float, 2> GetLatituteRange() const
+				{
+					std::array<float, 2> ret;
+					minLatitute->get(ret[0]);
+					maxLatitute->get(ret[1]);
+					return ret;
 				}
 				/*
 				* 函数: SetHeightFromCenterRange
@@ -207,8 +262,16 @@ namespace SciVis
 					minHeight->set(minH);
 					maxHeight->set(maxH);
 
+					computeRotMat();
 					sphere->setShape(new osg::Sphere(osg::Vec3(0.f, 0.f, 0.f), maxH));
 					return true;
+				}
+				std::array<float, 2> GetHeightFromCenterRange() const
+				{
+					std::array<float, 2> ret;
+					minHeight->get(ret[0]);
+					maxHeight->get(ret[1]);
+					return ret;
 				}
 				/*
 				* 函数: SetVolumeStartFromLongtituteZero
@@ -227,6 +290,44 @@ namespace SciVis
 				{
 					return deg * osg::PI / 180.f;
 				};
+				void computeRotMat()
+				{
+					float minLon, maxLon;
+					float minLat, maxLat;
+					float minH, maxH;
+					minLongtitute->get(minLon);
+					maxLongtitute->get(maxLon);
+					minLatitute->get(minLat);
+					maxLatitute->get(maxLat);
+					minHeight->get(minH);
+					maxHeight->get(maxH);
+
+					auto lon = .5f * (maxLon + minLon);
+					auto lat = .5f * (maxLat + minLat);
+					auto h = .5f * (maxH + minH);
+					osg::Vec3 dir;
+					dir.z() = h * sin(lat);
+					h = h * cos(lat);
+					dir.y() = h * sin(lon);
+					dir.x() = h * cos(lon);
+					dir.normalize();
+
+					osg::Matrix3 rotMat;
+					rotMat(2, 0) = dir.x();
+					rotMat(2, 1) = dir.y();
+					rotMat(2, 2) = dir.z();
+					auto tmp = osg::Vec3(0.f, 0.f, 1.f);
+					tmp = tmp ^ dir;
+					rotMat(0, 0) = tmp.x();
+					rotMat(0, 1) = tmp.y();
+					rotMat(0, 2) = tmp.z();
+					tmp = dir ^ tmp;
+					rotMat(1, 0) = tmp.x();
+					rotMat(1, 1) = tmp.y();
+					rotMat(1, 2) = tmp.z();
+
+					this->rotMat->set(rotMat);
+				}
 
 				friend class DirectVolumeRenderer;
 			};
@@ -367,9 +468,29 @@ namespace SciVis
 			{
 				param.useSlice->set(0);
 			}
+			/*
+			* 函数: SetShading
+			* 功能: 设置体绘制中的光照着色参数
+			* 参数:
+			* -- param: Blinn-Phong光照着色参数
+			*/
+			void SetShading(const ShadingParam& param)
+			{
+				if (!param.useShading)
+					this->param.useShading->set(0);
+				else {
+					this->param.useShading->set(1);
+					this->param.ka->set(param.ka);
+					this->param.kd->set(param.kd);
+					this->param.ks->set(param.ks);
+					this->param.shininess->set(param.shininess);
+					this->param.lightPos->set(param.lightPos);
+				}
+			}
 		};
 
 	} // namespace ScalarViser
 } // namespace SciVis
 
 #endif // !SCIVIS_SCALAR_VISER_DIRECT_VOLUME_RENDERER_H
+
