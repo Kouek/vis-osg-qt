@@ -206,8 +206,6 @@ private:
 		tfFilePath = filePath;
 
 		tfWdgt.SetTransferFunctionPointsData(pnts);
-
-		updateRenderer();
 	}
 
 	void saveTFToFile()

@@ -112,11 +112,6 @@
                <string>文件读入/自定义</string>
               </property>
              </item>
-             <item>
-              <property name="text">
-               <string>蓝红渐变</string>
-              </property>
-             </item>
             </widget>
            </item>
           </layout>

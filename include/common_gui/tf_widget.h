@@ -154,6 +154,14 @@ private:
 		}
 	};
 
+	enum class TFTemplate : int
+	{
+		Custom,
+		BlackWhite,
+		BlueGreenRed,
+		CyanPurpleOrange
+	};
+
 	uint8_t prevScalar;
 	std::array<float, 4> prevColor;
 
@@ -261,6 +269,47 @@ public:
 			prevColor[2] = static_cast<float>(qCol.blue()) / 255.f;
 			SetTransferFunctionPointColor(prevScalar, prevColor);
 			});
+		connect(ui.comboBox_LoadTFTemplate,
+			static_cast<void(QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+			this, &TransferFunctionWidget::updateFromTemplate);
+		connect(ui.pushButton_IncreaseAllAlpha, &QPushButton::clicked, [&]() {
+			const auto step = .01f;
+			for (uint32_t s = 0; s < 256; ++s)
+				if (tfPntsDat[s][3] >= 0.f + step &&
+					tfPntsDat[s][3] <= 1.f - step) {
+					tfPntsDat[s][3] += step;
+					if (tfPntsDat[s][3] >= 1.f)
+						tfPntsDat[s][3] = 1.f;
+				}
+			for (uint32_t s = 0; s < 256; ++s)
+				updatePointFromData(s);
+			
+			prevColor = std::array<float, 4>{-1.f, -1.f, -1.f, -1.f};
+
+			tfDatDirtyRng[0] = 0;
+			tfDatDirtyRng[1] = 255;
+
+			emit TransferFunctionChanged(0, GetTransferFunctionPointColor(0));
+			});
+		connect(ui.pushButton_DecreaseAllAlpha, &QPushButton::clicked, [&]() {
+			const auto step = .01f;
+			for (uint32_t s = 0; s < 256; ++s)
+				if (tfPntsDat[s][3] >= 0.f + step &&
+					tfPntsDat[s][3] <= 1.f - step) {
+					tfPntsDat[s][3] -= step;
+					if (tfPntsDat[s][3] < 0.f)
+						tfPntsDat[s][3] = 0.f;
+				}
+			for (uint32_t s = 0; s < 256; ++s)
+				updatePointFromData(s);
+
+			prevColor = std::array<float, 4>{-1.f, -1.f, -1.f, -1.f};
+
+			tfDatDirtyRng[0] = 0;
+			tfDatDirtyRng[1] = 255;
+
+			emit TransferFunctionChanged(0, GetTransferFunctionPointColor(0));
+			});
 	}
 
 	void SetTransferFunctionPointsData(const std::vector<std::pair<uint8_t, std::array<float, 4>>>& tfPntsDat)
@@ -277,6 +326,8 @@ public:
 
 		tfDatDirtyRng[0] = 0;
 		tfDatDirtyRng[1] = 255;
+
+		emit TransferFunctionChanged(0, GetTransferFunctionPointColor(0));
 	}
 
 	void SetTransferFunctionPointColor(uint8_t scalar, const std::array<float, 4>& color)
@@ -387,6 +438,55 @@ private:
 		}
 
 		tfDatDirtyRng[0] = tfDatDirtyRng[1] = -1;
+	}
+
+	void updateFromTemplate()
+	{
+		std::vector<std::pair<uint8_t, std::array<float, 4>>> newTFPntDat;
+		auto idx = ui.comboBox_LoadTFTemplate->currentIndex();
+		switch (static_cast<TFTemplate>(idx)) {
+		case TFTemplate::BlackWhite:
+			newTFPntDat.emplace_back(
+				std::make_pair(uint8_t(0), std::array<float, 4>{0.f, 0.f, 0.f, 0.f}));
+			newTFPntDat.emplace_back(
+				std::make_pair(uint8_t(64), std::array<float, 4>{0.f, 0.f, 0.f, .01f}));
+			newTFPntDat.emplace_back(
+				std::make_pair(uint8_t(191), std::array<float, 4>{1.f, 1.f, 1.f, .01f}));
+			newTFPntDat.emplace_back(
+				std::make_pair(uint8_t(255), std::array<float, 4>{1.f, 1.f, 1.f, 0.f}));
+			break;
+		case TFTemplate::BlueGreenRed:
+			newTFPntDat.emplace_back(
+				std::make_pair(uint8_t(0), std::array<float, 4>{0.f, 0.f, 1.f, 0.f}));
+			newTFPntDat.emplace_back(
+				std::make_pair(uint8_t(64), std::array<float, 4>{0.f, 0.f, 1.f, .01f}));
+			newTFPntDat.emplace_back(
+				std::make_pair(uint8_t(128), std::array<float, 4>{0.f, 1.f, 0.f, .01f}));
+			newTFPntDat.emplace_back(
+				std::make_pair(uint8_t(191), std::array<float, 4>{1.f, 0.f, 0.f, .01f}));
+			newTFPntDat.emplace_back(
+				std::make_pair(uint8_t(255), std::array<float, 4>{1.f, 0.f, 0.f, 0.f}));
+			break;
+		case TFTemplate::CyanPurpleOrange:
+			newTFPntDat.emplace_back(
+				std::make_pair(uint8_t(0), std::array<float, 4>{0.f, 1.f, 1.f, 0.f}));
+			newTFPntDat.emplace_back(
+				std::make_pair(uint8_t(64), std::array<float, 4>{0.f, 1.f, 1.f, .01f}));
+			newTFPntDat.emplace_back(
+				std::make_pair(uint8_t(127), std::array<float, 4>{.5f, 0.f, .5f, .01f}));
+			newTFPntDat.emplace_back(
+				std::make_pair(uint8_t(191), std::array<float, 4>{1.f, .647f, 0.f, .01f}));
+			newTFPntDat.emplace_back(
+				std::make_pair(uint8_t(255), std::array<float, 4>{1.f, .647f, 0.f, 0.f}));
+			break;
+		default:
+			return;
+		}
+
+		SetTransferFunctionPointsData(newTFPntDat);
+		ui.comboBox_LoadTFTemplate->setCurrentIndex(idx);
+
+		emit TransferFunctionChanged(0, GetTransferFunctionPointColor(0));
 	}
 };
 

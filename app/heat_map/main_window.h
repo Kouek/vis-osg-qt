@@ -106,9 +106,6 @@ private:
 		tfFilePath = filePath;
 
 		tfWdgt.SetTransferFunctionPointsData(pnts);
-
-		updateRendererColorTable();
-		updateHeatMapWidget();
 	}
 
 	void saveTFToFile()
