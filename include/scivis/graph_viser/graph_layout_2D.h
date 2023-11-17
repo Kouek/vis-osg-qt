@@ -5,12 +5,13 @@
 #include <algorithm>
 #include <string>
 #include <cmath>
+#include <limits>
 
 #include <vector>
 #include <string>
 #include <map>
 #include <vector>
-
+#include <unordered_set>
 #include <scivis/io/graph_io.h>
 
 namespace SciVis
@@ -19,10 +20,25 @@ namespace SciVis
 	{
 		class Graph
 		{
+			struct pair_hash
+			{
+				template <class T1, class T2>
+				std::size_t operator () (std::pair<T1, T2> const& pair) const
+				{
+					std::size_t h1 = std::hash<T1>()(pair.first);
+					std::size_t h2 = std::hash<T2>()(pair.second);
+
+					return h1 ^ h2;
+				}
+			};
+
 		private:
 			// Network structure
 			std::map<std::string, Node> nodes;
 			std::vector<Edge> edges;
+			std::unordered_set<std::pair<int, int>, pair_hash> nodePairs;
+			std::unordered_set<int> nodesNotMoved;
+
 			// Algorithm parameters
 			double K;									// Global spring constant (K).
 			int I;										// Number of iterations in cycle.
@@ -46,6 +62,15 @@ namespace SciVis
 			double edgeOpacity;							// Opacity.
 
 		public:
+			// GraphLayout parameters
+			double dt;
+			double repulsion;
+			double spring_k;
+			double attraction;
+			double edgeLength;
+			int n_iterations;
+			Vec2D layoutCenter;
+
 			// constuctor
 			Graph()
 			{
@@ -66,7 +91,40 @@ namespace SciVis
 				edgePercentageThreshold = -1.0;
 
 				edgeOpacity = 0.1;
+
+				repulsion = 0.2;
+				spring_k = 1.;
+				attraction = 0.32;
+				edgeLength = 50.;
 			};
+			const Vec2D multi(const Vec2D& lhs, const double rhs)
+			{
+				return Vec2D(
+					rhs * lhs.X(),
+					rhs * lhs.Y());
+			}
+
+			const double distance(Vec2D v1, Vec2D v2)
+			{
+				//double distance = sqrt(pow(v1.x - v2.x, 2.0) + pow(v1.y - v2.y, 2.0) + pow(v1.z - v2.z, 2.0));
+				double distance = sqrt(pow(v1.X() - v2.X(), 2.0) + pow(v1.Y() - v2.Y(), 2.0));
+				return distance;
+			}
+			const Vec2D compute_spring_force(Node n1, Node n2) {
+				return multi((n2.pos - n1.pos), spring_k);
+			}
+			const Vec2D compute_spring_force_general(double k, Vec2D v1, Vec2D v2) {
+				return multi((v1 - v2), k);
+			}
+
+			// Coloumb's Law: F_repulsion = k (q1 * q2) / r^2
+			const Vec2D compute_repulsion_force(Node n1, Node n2) {
+				double dist = distance(n1.pos, n2.pos);
+				return multi(Vec2D(
+					(n1.pos.X() - n2.pos.X()),
+					(n1.pos.Y() - n2.pos.Y())
+				), (1 / pow(dist, 2.0)));
+			}
 
 			const std::map<std::string, Node>& GetNodes() const
 			{
@@ -130,6 +188,126 @@ namespace SciVis
 					}
 				}
 			}
+
+			void updateReplusion() {
+				double dx, dy, f, fx, fy, d, dsq;
+				for (int i = 0; i < nodes.size(); ++i) {
+					if (nodesNotMoved.find(i) != nodesNotMoved.end()) continue;
+
+					auto n1_id = std::to_string(i);
+					for (int j = 0; j < nodes.size(); ++j) {
+						if (i == j) continue;
+
+						auto n2_id = std::to_string(j);
+						auto& n1 = nodes[n1_id];
+						auto& n2 = nodes[n2_id];
+
+						dx = n1.pos.X() - n2.pos.X();
+						dy = n1.pos.Y() - n2.pos.Y();
+
+						d = distance(n1.pos, n2.pos);
+						if (d > edgeLength) dsq = edgeLength;
+						else dsq = d;
+						dsq *= dsq;
+
+						f = repulsion * 128 * 128 / dsq;
+						fx = f * dx / d;
+						fy = f * dy / d;
+						auto new_f = Vec2D(fx, fy);
+						n1.force += new_f;
+					}
+				}
+			}
+
+			void updateSpring()
+			{
+				double dx, dy, f, fx, fy, d, dsq;
+				for (int i = 0; i < nodes.size(); ++i) {
+					if (nodesNotMoved.find(i) != nodesNotMoved.end()) continue;
+
+					auto n1_id = std::to_string(i);
+					for (int j = 0; j < nodes.size(); ++j) {
+						if (i == j) continue;
+
+						auto n2_id = std::to_string(j);
+						auto& n1 = nodes[n1_id];
+						auto& n2 = nodes[n2_id];
+
+						std::pair<int, int> edge(i, j);
+						if (nodePairs.find(edge) != nodePairs.end()) {
+							dx = n2.pos.X() - n1.pos.X();
+							dy = n2.pos.Y() - n1.pos.Y();
+
+							d = distance(n1.pos, n2.pos);
+							if (d > edgeLength) d = edgeLength;
+
+							f = spring_k * d;
+							fx = f * dx / d;
+							fy = f * dy / d;
+							auto new_f = Vec2D(fx, fy);
+							n1.force += new_f;
+						}
+					}
+				}
+			}
+
+			void updateCenterSpring()
+			{
+				double dx, dy, f, fx, fy, d, dsq;
+				for (int i = 0; i < nodes.size(); ++i) {
+					if (nodesNotMoved.find(i) != nodesNotMoved.end()) continue;
+
+					auto n1_id = std::to_string(i);
+					auto& n1 = nodes[n1_id];
+					dx = n1.pos.X() - layoutCenter.X();
+					dy = n1.pos.Y() - layoutCenter.Y();
+					d = distance(n1.pos, layoutCenter);
+
+					f = attraction * d;
+					fx = f * dx / d;
+					fy = f * dy / d;
+					auto new_f = Vec2D(fx, fy);
+					n1.force -= new_f;
+				}
+			}
+
+			void updateAllEdges()
+			{
+				for (int k = 0; k < edges.size(); ++k) {
+					edges[k].start = nodes[edges[k].sourceLabel].pos;
+					edges[k].end = nodes[edges[k].targetLabel].pos;
+					edges[k].subdivs.front() = Edge::center(edges[k].start, edges[k].end);
+				}
+			}
+
+			void SetNodesNotMoved(const std::unordered_set<int>& nodesNotMoved)
+			{
+				this->nodesNotMoved = nodesNotMoved;
+			}
+
+			void Update(double deltaT) {
+				updateReplusion();
+				updateSpring();
+				updateCenterSpring();
+
+				double dx, dy, dsq, s;
+				for (int i = 0; i < nodes.size(); ++i) {
+					auto& node = nodes[std::to_string(i)];
+
+					node.acc = node.force;
+					auto dlt = node.acc * deltaT;
+					node.vel += dlt;
+
+					dlt = node.vel * deltaT;
+					node.pos += dlt;
+
+					node.force = node.vel = node.acc = Vec2D(0, 0);
+				}
+
+				updateAllEdges();
+				++n_iterations;
+			}
+
 			int Iterate()
 			{
 				int edgesNum = (int)edges.size();
@@ -240,7 +418,28 @@ namespace SciVis
 				int edgesNum = (int)edges.size();
 				for (int i = 0; i < edgesNum; i++)
 					edges[i].width *= 1.0 / (wmax + 1.0);
+				// generate nodePairs
+				for (int i = 0; i < edges.size(); i++) {
+					std::pair <int, int> temp;
+					temp = std::make_pair(atoi(edges[i].sourceLabel.c_str()), atoi(edges[i].targetLabel.c_str()));
+					nodePairs.insert(temp);
+				}
 				BuildCompatibilityLists();
+
+				Vec2D minPos(std::numeric_limits<float>::max(), std::numeric_limits<float>::max());
+				Vec2D maxPos(std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest());
+				for (auto& pair : nodes) {
+					if (minPos.X() > pair.second.pos.X())
+						minPos.setX(pair.second.pos.X());
+					if (minPos.Y() > pair.second.pos.Y())
+						minPos.setY(pair.second.pos.Y());
+					if (maxPos.X() < pair.second.pos.X())
+						maxPos.setX(pair.second.pos.X());
+					if (maxPos.Y() < pair.second.pos.Y())
+						maxPos.setY(pair.second.pos.Y());
+				}
+
+				layoutCenter = (minPos + maxPos) * .5f;
 			}
 		};
 	};

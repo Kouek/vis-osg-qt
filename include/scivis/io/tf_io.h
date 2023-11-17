@@ -18,8 +18,10 @@ namespace SciVis
 			{
 				std::ifstream is(filePath, std::ios::in);
 				if (!is.is_open()) {
-					if (errMsg)
-						*errMsg = "Invalid File Path";
+					if (errMsg) {
+						*errMsg = "Invalid File Path: ";
+						errMsg->append(filePath);
+					}
 					return std::vector<std::pair<uint8_t, std::array<float, 4>>>();
 				}
 
@@ -47,8 +49,10 @@ namespace SciVis
 			{
 				std::ofstream os(filePath, std::ios::out);
 				if (!os.is_open()) {
-					if (errMsg)
-						*errMsg = "Invalid File Path";
+					if (errMsg) {
+						*errMsg = "Invalid File Path: ";
+						errMsg->append(filePath);
+					}
 					return false;
 				}
 

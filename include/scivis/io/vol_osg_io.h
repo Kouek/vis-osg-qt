@@ -19,7 +19,7 @@ namespace SciVis
 				const std::array<uint8_t, 3>& logDstDim,
 				osg::Texture::FilterMode filterMode = osg::Texture::LINEAR)
 			{
-				std::array<int, 3> dstDim = { 1 << logDstDim[0], 1 << logDstDim[1], 1 << logDstDim[2] };
+				std::array<uint32_t, 3> dstDim = { 1 << logDstDim[0], 1 << logDstDim[1], 1 << logDstDim[2] };
 				std::array<float, 3> scaleDst2Src = { static_cast<float>(srcDim[0] - 1) / (dstDim[0] - 1),
 										static_cast<float>(srcDim[1] - 1) / (dstDim[1] - 1),
 										static_cast<float>(srcDim[2] - 1) / (dstDim[2] - 1) };
@@ -29,12 +29,12 @@ namespace SciVis
 				img->setInternalTextureFormat(GL_RED);
 				auto* pxPtr = reinterpret_cast<float*>(img->data());
 
-				for (int z = 0; z < dstDim[2]; ++z)
-					for (int y = 0; y < dstDim[1]; ++y)
-						for (int x = 0; x < dstDim[0]; ++x) {
-							auto srcZ = static_cast<int>(z * scaleDst2Src[2]);
-							auto srcY = static_cast<int>(y * scaleDst2Src[1]);
-							auto srcX = static_cast<int>(x * scaleDst2Src[0]);
+				for (uint32_t z = 0; z < dstDim[2]; ++z)
+					for (uint32_t y = 0; y < dstDim[1]; ++y)
+						for (uint32_t x = 0; x < dstDim[0]; ++x) {
+							auto srcZ = static_cast<uint32_t>(z * scaleDst2Src[2]);
+							auto srcY = static_cast<uint32_t>(y * scaleDst2Src[1]);
+							auto srcX = static_cast<uint32_t>(x * scaleDst2Src[0]);
 							if (srcX >= srcDim[0])
 								srcX = srcDim[0] - 1;
 							if (srcY >= srcDim[1])
@@ -46,15 +46,15 @@ namespace SciVis
 								return static_cast<size_t>(z) * srcDim[1] * srcDim[0] + y * srcDim[0] + x;
 							};
 
+							auto srcX1 = srcX == srcDim[0] - 1 ? srcX : srcX + 1;
+							auto srcY1 = srcY == srcDim[1] - 1 ? srcY : srcY + 1;
+							auto srcZ1 = srcZ == srcDim[2] - 1 ? srcZ : srcZ + 1;
 							if (srcX != 0)
 								--srcX;
 							if (srcY != 0)
 								--srcY;
 							if (srcZ != 0)
 								--srcZ;
-							auto srcX1 = srcX == srcDim[0] - 1 ? srcX : srcX + 1;
-							auto srcY1 = srcY == srcDim[1] - 1 ? srcY : srcY + 1;
-							auto srcZ1 = srcZ == srcDim[2] - 1 ? srcZ : srcZ + 1;
 
 							auto avgV = 0.f;
 							uint8_t cnt = 0;

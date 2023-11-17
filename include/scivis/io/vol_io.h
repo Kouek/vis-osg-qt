@@ -21,8 +21,10 @@ namespace SciVis
 			{
 				std::ifstream is(filePath, std::ios::in | std::ios::binary | std::ios::ate);
 				if (!is.is_open()) {
-					if (errMsg)
-						*errMsg = "Invalid File Path";
+					if (errMsg) {
+						*errMsg = "Invalid File Path: ";
+						errMsg->append(filePath);
+					}
 					return std::vector<uint8_t>();
 				}
 
@@ -52,8 +54,10 @@ namespace SciVis
 			{
 				std::ofstream os(filePath, std::ios::out | std::ios::binary);
 				if (!os.is_open()) {
-					if (errMsg)
-						*errMsg = "Invalid File Path";
+					if (errMsg) {
+						*errMsg = "Invalid File Path: ";
+						errMsg->append(filePath);
+					}
 					return false;
 				}
 
@@ -67,10 +71,61 @@ namespace SciVis
 		class TXTVolume
 		{
 		public:
-			static std::vector<float> LoadFromFile(
+			std::array<float, 2> valRng;
+			std::vector<float> dat;
+
+		public:
+			static TXTVolume LoadFromFile(
 				const std::string& filePath, const std::array<uint32_t, 3>& dim,
-				float nullVal, std::string* errMsg = nullptr)
+				float nullVal, bool flipZ = false,
+				std::string* errMsg = nullptr)
 			{
+				TXTVolume ret;
+
+				FILE* fp = fopen(filePath.c_str(), "r");
+				if (!fp) {
+					if (errMsg) {
+						*errMsg = "Invalid File Path: ";
+						errMsg->append(filePath);
+					}
+					return ret;
+				}
+
+				auto voxNum = static_cast<size_t>(dim[0]) * dim[1] * dim[2];
+				ret.dat.resize(voxNum);
+				for (size_t i = 0; i < voxNum; ++i)
+					fscanf(fp, "%f", &ret.dat[i]);
+				fclose(fp);
+
+				if (flipZ) {
+					auto dimYxX = static_cast<size_t>(dim[1]) * dim[0];
+					for (size_t z = 0; z < dim[2] / 2; ++z) {
+						auto z1 = dim[2] - 1 - z;
+						if (z == z1) continue;
+
+						auto zBeg = ret.dat.begin() + z * dimYxX;
+						auto zEnd = ret.dat.begin() + (z + 1) * dimYxX;
+						auto z1Beg = ret.dat.begin() + z1 * dimYxX;
+						std::swap_ranges(zBeg, zEnd, z1Beg);
+					}
+				}
+
+				for (auto v : ret.dat) {
+					if (v == nullVal) continue;
+					if (ret.valRng[0] > v)
+						ret.valRng[0] = v;
+					if (ret.valRng[1] < v)
+						ret.valRng[1] = v;
+				}
+
+				return ret;
+			}
+
+		private:
+			TXTVolume()
+			{
+				valRng[0] = std::numeric_limits <float>::max();
+				valRng[1] = std::numeric_limits <float>::lowest();
 			}
 		};
 
@@ -114,8 +169,10 @@ namespace SciVis
 
 				std::ifstream is(filePath, std::ios::in);
 				if (!is.is_open()) {
-					if (errMsg)
-						*errMsg = "Invalid File Path";
+					if (errMsg) {
+						*errMsg = "Invalid File Path: ";
+						errMsg->append(filePath);
+					}
 					return ret;
 				}
 
@@ -167,7 +224,7 @@ namespace SciVis
 				valRng[0] = lonRng[0] = latRng[0] = hRng[0]
 					= std::numeric_limits <float>::max();
 				valRng[1] = lonRng[1] = latRng[1] = hRng[1]
-					= std::numeric_limits <float>::min();
+					= std::numeric_limits <float>::lowest();
 			}
 		};
 	}
@@ -186,6 +243,23 @@ namespace SciVis
 				return dat;
 			}
 
+			static std::vector<float> FloatToNormalizedFloat(
+				const std::vector<float>& floatDat,
+				const std::array<float, 2>& valRng,
+				float nullVal, float nullValMap = 0.f)
+			{
+				std::vector<float> dat(floatDat.size());
+				size_t i = 0;
+				auto dlt = valRng[1] - valRng[0];
+				for (size_t i = 0; i < floatDat.size(); ++i) {
+					if (floatDat[i] == nullVal)
+						dat[i] = nullValMap;
+					else
+						dat[i] = (floatDat[i] - valRng[0]) / dlt;
+				}
+				return dat;
+			}
+
 			static std::vector<uint8_t> NormalizedFloatToU8(const std::vector<float>& fDat)
 			{
 				std::vector<uint8_t> dat(fDat.size());
@@ -193,6 +267,40 @@ namespace SciVis
 				for (size_t i = 0; i < fDat.size(); ++i)
 					dat[i] = fDat[i] * 255.f;
 				return dat;
+			}
+
+			static std::vector<float> RoughFloatToSmooth(const std::vector<float>& fDat, const std::array<uint32_t, 3>& dim)
+			{
+				std::vector<float> smoothed(fDat.size());
+				size_t dimYxX = dim[1] * dim[0];
+				auto sample = [&](uint32_t x, uint32_t y, uint32_t z) -> float {
+					x = std::min(x, dim[0] - 1);
+					y = std::min(y, dim[1] - 1);
+					z = std::min(z, dim[2] - 1);
+					return fDat[z * dimYxX + y * dim[0] + x];
+				};
+
+				for (uint32_t z = 0; z < dim[2]; ++z)
+					for (uint32_t y = 0; y < dim[1]; ++y)
+						for (uint32_t x = 0; x < dim[0]; ++x) {
+							std::array<float, 27> field;
+							for (int8_t dz = -1; dz < 2; ++dz)
+								for (int8_t dy = -1; dy < 2; ++dy)
+									for (int8_t dx = -1; dx < 2; ++dx) {
+										auto i = (dz + 1) * 9 + (dy + 1) * 3 + (dx + 1);
+										field[i] = sample(
+											x == 0 && dx < 0 ? x : x + dx,
+											y == 0 && dy < 0 ? y : y + dy,
+											z == 0 && dz < 0 ? z : z + dz);
+									}
+							auto& val = smoothed[z * dimYxX + y * dim[0] + x];
+							val = 0.f;
+							for (uint8_t i = 0; i < 27; ++i)
+								val += field[i];
+							val /= 27.f;
+						}
+
+				return smoothed;
 			}
 		};
 	}

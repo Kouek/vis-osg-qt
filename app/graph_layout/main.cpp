@@ -7,42 +7,17 @@
 
 #include <common/osg.h>
 
+#include <scivis/common/zhongdian15.h>
 #include <scivis/graph_viser/graph_layout_2D.h>
 #include <scivis/graph_viser/graph_renderer.h>
 
 static const std::string nodesPath = DATA_PATH_PREFIX"network/nodes.csv";
 static const std::string edgesPath = DATA_PATH_PREFIX"network/edges.csv";
-static const std::string graphName = "network";
-static const std::array<uint32_t, 3> dim = { 300, 350, 50 };
-static const std::array<uint8_t, 3> log2Dim = { 9, 9, 6 };
-static const std::array<float, 2> lonRng = { -30.f, 30.f };
-static const std::array<float, 2> latRng = { -30.f, 30.f };
-static const std::array<float, 2> hRng = { 5000.f, 10000.f };
-static const float hScale = 100.f;
-
-static SciVis::GraphViser::Graph graph;
-
-static void initGraph()
-{
-	SciVis::GraphLoader::MkFileManager fm;
-	auto nodes = fm.ReadGraphNodes(nodesPath);
-	auto edges = fm.ReadGraphEdges(nodesPath, edgesPath);
-
-	graph.Set(nodes, edges);
-
-	graph.SetAlgorithmParams(0.1, 5, 90, 0.6, 3);
-	graph.SetNetworkParams(-1.0, -1.0);
-	SciVis::Vec2D gravitationCenter;
-	gravitationCenter.set(0.0, 0.0);
-	graph.SetPhysicsParams(0.4, 1e-4, gravitationCenter, 1.0);
-
-	do {
-		while (graph.Iterate() > 0);
-		graph.AddSubvisions();
-	} while (graph.UpdateCycle() > 0);
-
-	graph.Smooth();
-}
+static std::string graphName = "network";
+static std::array<float, 2> lonRng = { -60.f, -30.f };
+const std::array<float, 2> latRng = { -20.f, 20.f };
+const std::array<float, 2> hRng = { 10000.f, 15000.f };
+const float hScale = 100.f;
 
 int main(int argc, char** argv)
 {
@@ -55,20 +30,87 @@ int main(int argc, char** argv)
 	grp->addChild(createEarth());
 
 	std::string errMsg;
-	auto nodes = std::make_shared<std::map<std::string, osg::Vec3>>();
-	auto edges = std::make_shared<std::vector<std::array<std::string, 2>>>();
+
+	std::unordered_set<int> nodesNotMoved;
+	nodesNotMoved.emplace(25);
 
 	auto renderer = std::make_shared<SciVis::GraphViser::GraphRenderer>();
-	{
-		initGraph();
-		for (auto itr = graph.GetNodes().begin(); itr != graph.GetNodes().end(); ++itr)
-			nodes->emplace(std::make_pair(
-				itr->first, osg::Vec3(itr->second.pos.X(), itr->second.pos.Y(), 1.f)));
-		for (auto itr = graph.GetEdges().begin(); itr != graph.GetEdges().end(); ++itr)
-			edges->emplace_back(std::array<std::string, 2>{itr->sourceLabel, itr->targetLabel});
+
+	SciVis::GraphViser::Graph graph;
+	std::vector<osg::Vec3> colors;
+
+	auto initGraph = [&]() {
+		SciVis::GraphLoader::MkFileManager fm;
+		auto nodes = fm.ReadGraphNodes(SciVis::GetDataPathPrefix() + nodesPath);
+		auto edges = fm.ReadGraphEdges(
+			SciVis::GetDataPathPrefix() + nodesPath, SciVis::GetDataPathPrefix() + edgesPath);
+
+		graph.Set(nodes, edges);
+
+		colors.resize(graph.GetNodes().size());
+		for (auto& col : colors) {
+			col.x() = 1.f * rand() / RAND_MAX;
+			col.y() = 1.f * rand() / RAND_MAX;
+			col.z() = 1.f * rand() / RAND_MAX;
+		}
+	};
+	auto layoutGraph = [&]() {
+		graph.SetNodesNotMoved(nodesNotMoved);
+
+		graph.n_iterations = 0;
+		while (graph.n_iterations < 1000) {
+			graph.Update(.1);
+		}
+	};
+	auto edgeClusterGraph = [&]() {
+		graph.SetAlgorithmParams(0.1, 5, 90, 0.6, 3);
+		graph.SetNetworkParams(-1.0, -1.0);
+		SciVis::Vec2D gravitationCenter;
+		gravitationCenter.set(0.0, 0.0);
+		graph.SetPhysicsParams(0.4, 1e-4, gravitationCenter, 1.0);
+
+		do {
+			while (graph.Iterate() > 0);
+			graph.AddSubvisions();
+		} while (graph.UpdateCycle() > 0);
+
+		graph.Smooth();
+	};
+	auto loadGraphToOSG = [&]() {
+		auto nodes = std::make_shared<std::map<std::string, SciVis::GraphViser::GraphRenderer::Node>>();
+		auto edges = std::make_shared<std::vector<SciVis::GraphViser::GraphRenderer::Edge>>();
+
+		size_t i = 0;
+		for (auto itr = graph.GetNodes().begin(); itr != graph.GetNodes().end(); ++itr) {
+			SciVis::GraphViser::GraphRenderer::Node node;
+			node.pos = osg::Vec3(itr->second.pos.X(), itr->second.pos.Y(), 1.f);
+			node.color = colors[i];
+
+			nodes->emplace(std::make_pair(itr->first, node));
+			++i;
+		}
+
+		for (auto itr = graph.GetEdges().begin(); itr != graph.GetEdges().end(); ++itr) {
+			edges->emplace_back();
+
+			auto& edge = edges->back();
+			edge.from = itr->sourceLabel;
+			edge.to = itr->targetLabel;
+			if (itr->subdivs.empty()) {
+				edge.subDivs.emplace_back(osg::Vec3(itr->start.X(), itr->start.Y(), 1.f));
+				edge.subDivs.emplace_back(osg::Vec3(itr->end.X(), itr->end.Y(), 1.f));
+			}
+			else {
+				edge.subDivs.emplace_back(osg::Vec3(itr->start.X(), itr->start.Y(), 1.f));
+				for (auto& subdiv : itr->subdivs)
+					edge.subDivs.emplace_back(osg::Vec3(subdiv.X(), subdiv.Y(), 1.f));
+				edge.subDivs.emplace_back(osg::Vec3(itr->end.X(), itr->end.Y(), 1.f));
+			}
+		}
 
 		renderer->AddGraph(graphName, nodes, edges);
-
+	};
+	auto initOSGGraph = [&]() {
 		auto graph = renderer->GetGraph(graphName);
 		graph->SetLongtituteRange(lonRng[0], lonRng[1]);
 		graph->SetLatituteRange(latRng[0], latRng[1]);
@@ -78,9 +120,29 @@ int main(int argc, char** argv)
 		graph->SetNodeGeometrySize(.02f * static_cast<float>(osg::WGS_84_RADIUS_EQUATOR));
 
 		graph->Update();
-	}
+	};
+
+	initGraph();
+	loadGraphToOSG();
+	initOSGGraph();
+
+	layoutGraph();
+	auto lonOffs = 1.5f * (lonRng[1] - lonRng[0]);
+	lonRng[0] += lonOffs;
+	lonRng[1] += lonOffs;
+	graphName += "_layouted";
+	loadGraphToOSG();
+	initOSGGraph();
+
+	edgeClusterGraph();
+	lonRng[0] += lonOffs;
+	lonRng[1] += lonOffs;
+	graphName += "_edge_clustered";
+	loadGraphToOSG();
+	initOSGGraph();
 
 	grp->addChild(renderer->GetGroup());
+
 	viewer->setSceneData(grp);
 
 	auto prevClk = clock();

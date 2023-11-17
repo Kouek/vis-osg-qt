@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>MainWindow</class>
- <widget class="QWidget" name="MainWindow">
+ <class>MCSQRMainWindow</class>
+ <widget class="QWidget" name="MCSQRMainWindow">
   <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
     <width>400</width>
-    <height>300</height>
+    <height>600</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -27,6 +27,13 @@
       <string>绘制</string>
      </property>
      <layout class="QVBoxLayout" name="verticalLayout_2">
+      <item>
+       <widget class="QCheckBox" name="checkBox_UseSmoothedVolume">
+        <property name="text">
+         <string>体光滑</string>
+        </property>
+       </widget>
+      </item>
       <item>
        <widget class="QGroupBox" name="groupBox_6">
         <property name="title">
@@ -54,11 +61,14 @@
            </item>
            <item>
             <widget class="QSlider" name="horizontalSlider_IsoplethH">
+             <property name="mouseTracking">
+              <bool>false</bool>
+             </property>
              <property name="maximum">
               <number>255</number>
              </property>
              <property name="tracking">
-              <bool>false</bool>
+              <bool>true</bool>
              </property>
              <property name="orientation">
               <enum>Qt::Horizontal</enum>

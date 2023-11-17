@@ -3,9 +3,16 @@
 
 #include <memory>
 
+#ifdef DEPLOY_ON_ZHONGDIAN15
+#include <grid/ui/uicomctrl/ccusbasedlg.h>
+#else
+#include <QtWidgets/qwidget.h>
+using CCusBaseDlg = QWidget;
+#endif // DEPLOY_ON_ZHONGDIAN15
+
 #include <QtWidgets/qfiledialog.h>
 
-#include <ui_main_window.h>
+#include <ui_dvr_main_window.h>
 
 #include <common_gui/tf_widget.h>
 
@@ -15,26 +22,30 @@
 
 namespace Ui
 {
-	class MainWindow;
+	class DVRMainWindow;
 }
 
-class MainWindow : public QWidget
+class DVRMainWindow : public CCusBaseDlg
 {
 	Q_OBJECT
 
 private:
 	QString tfFilePath;
 	TransferFunctionWidget tfWdgt;
-	Ui::MainWindow ui;
+	Ui::DVRMainWindow ui;
 
 	std::shared_ptr<SciVis::ScalarViser::DirectVolumeRenderer> renderer;
 
 public:
-	MainWindow(
+	DVRMainWindow(
 		std::shared_ptr<SciVis::ScalarViser::DirectVolumeRenderer> renderer,
 		QWidget* parent = nullptr)
-		: QWidget(parent), renderer(renderer)
+		: CCusBaseDlg(parent), renderer(renderer)
 	{
+		setWindowFlags(
+			Qt::WindowMinimizeButtonHint |
+			Qt::WindowCloseButtonHint);
+
 		ui.setupUi(this);
 
 		ui.groupBox_TF->layout()->addWidget(&tfWdgt);
@@ -47,16 +58,16 @@ public:
 		}
 		ui.spinBox_MaxStepCnt->setValue(renderer->GetMaxStepCount());
 
-		connect(ui.pushButton_OpenTF, &QPushButton::clicked, this, &MainWindow::openTFFromFile);
-		connect(ui.pushButton_SaveTF, &QPushButton::clicked, this, &MainWindow::saveTFToFile);
+		connect(ui.pushButton_OpenTF, &QPushButton::clicked, this, &DVRMainWindow::openTFFromFile);
+		connect(ui.pushButton_SaveTF, &QPushButton::clicked, this, &DVRMainWindow::saveTFToFile);
 
-		connect(&tfWdgt, &TransferFunctionWidget::TransferFunctionChanged, this, &MainWindow::updateRenderer);
+		connect(&tfWdgt, &TransferFunctionWidget::TransferFunctionChanged, this, &DVRMainWindow::updateRenderer);
 
 		connect(ui.doubleSpinBox_DeltaT,
 			static_cast<void(QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged),
-			this, &MainWindow::updateRenderer);
+			this, &DVRMainWindow::updateRenderer);
 		connect(ui.spinBox_MaxStepCnt, static_cast<void(QSpinBox::*)(int)>(&QSpinBox::valueChanged),
-			this, &MainWindow::updateRenderer);
+			this, &DVRMainWindow::updateRenderer);
 
 		connect(ui.checkBox_UseSlice, &QCheckBox::stateChanged, [&](int state) {
 			if (state == Qt::Checked) {
@@ -77,27 +88,27 @@ public:
 				ui.doubleSpinBox_SliceDirY->setEnabled(false);
 				ui.doubleSpinBox_SliceDirZ->setEnabled(false);
 
-				renderer->DisableSlicing();
+				this->renderer->DisableSlicing();
 			}
 			});
 		connect(ui.doubleSpinBox_SliceCntrX,
 			static_cast<void(QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged),
-			this, &MainWindow::updateSlice);
+			this, &DVRMainWindow::updateSlice);
 		connect(ui.doubleSpinBox_SliceCntrY,
 			static_cast<void(QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged),
-			this, &MainWindow::updateSlice);
+			this, &DVRMainWindow::updateSlice);
 		connect(ui.doubleSpinBox_SliceCntrZ,
 			static_cast<void(QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged),
-			this, &MainWindow::updateSlice);
+			this, &DVRMainWindow::updateSlice);
 		connect(ui.doubleSpinBox_SliceDirX,
 			static_cast<void(QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged),
-			this, &MainWindow::updateSlice);
+			this, &DVRMainWindow::updateSlice);
 		connect(ui.doubleSpinBox_SliceDirY,
 			static_cast<void(QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged),
-			this, &MainWindow::updateSlice);
+			this, &DVRMainWindow::updateSlice);
 		connect(ui.doubleSpinBox_SliceDirZ,
 			static_cast<void(QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged),
-			this, &MainWindow::updateSlice);
+			this, &DVRMainWindow::updateSlice);
 
 		connect(ui.checkBox_UseShading, &QCheckBox::stateChanged, [&](int state) {
 			if (state == Qt::Checked) {
@@ -125,25 +136,25 @@ public:
 			});
 		connect(ui.doubleSpinBox_Ka,
 			static_cast<void(QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged),
-			this, &MainWindow::updateRenderer);
+			this, &DVRMainWindow::updateRenderer);
 		connect(ui.doubleSpinBox_Kd,
 			static_cast<void(QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged),
-			this, &MainWindow::updateRenderer);
+			this, &DVRMainWindow::updateRenderer);
 		connect(ui.doubleSpinBox_Ks,
 			static_cast<void(QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged),
-			this, &MainWindow::updateRenderer);
+			this, &DVRMainWindow::updateRenderer);
 		connect(ui.doubleSpinBox_Shininess,
 			static_cast<void(QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged),
-			this, &MainWindow::updateRenderer);
+			this, &DVRMainWindow::updateRenderer);
 		connect(ui.doubleSpinBox_LightPosLon,
 			static_cast<void(QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged),
-			this, &MainWindow::updateRenderer);
+			this, &DVRMainWindow::updateRenderer);
 		connect(ui.doubleSpinBox_LightPosLat,
 			static_cast<void(QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged),
-			this, &MainWindow::updateRenderer);
+			this, &DVRMainWindow::updateRenderer);
 		connect(ui.doubleSpinBox_LightPosH,
 			static_cast<void(QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged),
-			this, &MainWindow::updateRenderer);
+			this, &DVRMainWindow::updateRenderer);
 	}
 
 	osg::ref_ptr<osg::Texture1D> GetTFTexture() const
@@ -151,6 +162,30 @@ public:
 		auto tfPnts = tfWdgt.GetTransferFunctionPointsData();
 		auto tex = SciVis::OSGConvertor::TransferFunctionPoints::ToTexture(tfPnts);
 		return tex;
+	}
+
+	struct SliceParam
+	{
+		osg::Vec3 cntr;
+		osg::Vec3 dir;
+	};
+	SliceParam GetSliceParam()
+	{
+		SliceParam param;
+
+		param.dir.x() = ui.doubleSpinBox_SliceDirX->value();
+		param.dir.y() = ui.doubleSpinBox_SliceDirY->value();
+		param.dir.z() = ui.doubleSpinBox_SliceDirZ->value();
+		param.dir.normalize();
+		ui.doubleSpinBox_SliceDirX->setValue(param.dir.x());
+		ui.doubleSpinBox_SliceDirY->setValue(param.dir.y());
+		ui.doubleSpinBox_SliceDirZ->setValue(param.dir.z());
+
+		param.cntr.x() = ui.doubleSpinBox_SliceCntrX->value();
+		param.cntr.y() = ui.doubleSpinBox_SliceCntrY->value();
+		param.cntr.z() = ui.doubleSpinBox_SliceCntrZ->value();
+
+		return param;
 	}
 
 	void UpdateFromRenderer()
@@ -166,26 +201,42 @@ public:
 			latRng[i] = rad2Deg(latRng[i]);
 			hRng[i] = rad2Deg(hRng[i]);
 		}
-		lonRng[0] = std::max(lonRng[0] - 10.f, 0.f);
-		lonRng[1] = std::min(lonRng[1] + 10.f, 180.f);
-		latRng[0] = std::max(latRng[0] - 10.f, -90.f);
-		latRng[1] = std::min(latRng[1] + 10.f, +90.f);
+		lonRng[0] = std::max(lonRng[0] - 30.f, -180.f);
+		lonRng[1] = std::min(lonRng[1] + 30.f, 180.f);
+		latRng[0] = std::max(latRng[0] - 30.f, -90.f);
+		latRng[1] = std::min(latRng[1] + 30.f, +90.f);
 		hRng[1] *= 2.f;
 
 		ui.doubleSpinBox_LightPosLon->setMinimum(lonRng[0]);
 		ui.doubleSpinBox_LightPosLon->setMaximum(lonRng[1]);
 		ui.doubleSpinBox_LightPosLon->setValue(.5f * (lonRng[0] + lonRng[1]));
 		ui.doubleSpinBox_LightPosLon->setSingleStep(10.f);
-		
+
 		ui.doubleSpinBox_LightPosLat->setMinimum(latRng[0]);
 		ui.doubleSpinBox_LightPosLat->setMaximum(latRng[1]);
 		ui.doubleSpinBox_LightPosLat->setValue(.5f * (latRng[0] + latRng[1]));
 		ui.doubleSpinBox_LightPosLat->setSingleStep(10.f);
-		
+
 		ui.doubleSpinBox_LightPosH->setMinimum(hRng[0]);
 		ui.doubleSpinBox_LightPosH->setMaximum(hRng[1]);
 		ui.doubleSpinBox_LightPosH->setValue(.5f * (hRng[0] + hRng[1]));
 		ui.doubleSpinBox_LightPosH->setSingleStep(.1f * (hRng[1] - hRng[0]));
+	}
+
+	void LoadTFFromFile(const std::string& path)
+	{
+		std::string errMsg;
+		auto pnts = SciVis::Loader::TransferFunctionPoints::LoadFromFile(path, &errMsg);
+		if (!errMsg.empty()) {
+			ui.label_OpenedTF->setText(tr(errMsg.c_str()));
+			return;
+		}
+
+		auto filePath = QString::fromStdString(path);
+		ui.label_OpenedTF->setText(filePath);
+		tfFilePath = filePath;
+
+		tfWdgt.SetTransferFunctionPointsData(pnts);
 	}
 
 private:
@@ -217,21 +268,9 @@ private:
 
 	void updateSlice()
 	{
-		osg::Vec3 dir(
-			ui.doubleSpinBox_SliceDirX->value(),
-			ui.doubleSpinBox_SliceDirY->value(),
-			ui.doubleSpinBox_SliceDirZ->value());
-		dir.normalize();
-		ui.doubleSpinBox_SliceDirX->setValue(dir.x());
-		ui.doubleSpinBox_SliceDirY->setValue(dir.y());
-		ui.doubleSpinBox_SliceDirZ->setValue(dir.z());
+		auto slice = GetSliceParam();
 
-		osg::Vec3 cntr(
-			ui.doubleSpinBox_SliceCntrX->value(),
-			ui.doubleSpinBox_SliceCntrY->value(),
-			ui.doubleSpinBox_SliceCntrZ->value());
-
-		renderer->SetSlicing(cntr, dir);
+		renderer->SetSlicing(slice.cntr, slice.dir);
 
 		updateRenderer();
 	}

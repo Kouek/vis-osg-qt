@@ -1,5 +1,5 @@
-#ifndef SCIVIS_SCALAR_VISER_MCR_H
-#define SCIVIS_SCALAR_VISER_MCR_H
+#ifndef SCIVIS_SCALAR_VISER_MARCHING_SQUARE_RENDERER_H
+#define SCIVIS_SCALAR_VISER_MARCHING_SQUARE_RENDERER_H
 
 #include <algorithm>
 #include <memory>
@@ -15,6 +15,8 @@
 #include <osg/Geode>
 #include <osg/Geometry>
 #include <osg/Texture3D>
+
+#include <scivis/common/zhongdian15.h>
 
 namespace SciVis
 {
@@ -34,10 +36,12 @@ namespace SciVis
 					grp = new osg::Group;
 					osg::ref_ptr<osg::Shader> vertShader = osg::Shader::readShaderFile(
 						osg::Shader::VERTEX,
+						GetDataPathPrefix() +
 						SCIVIS_SHADER_PREFIX
 						"scivis/scalar_viser/mcsqr_vert.glsl");
 					osg::ref_ptr<osg::Shader> fragShader = osg::Shader::readShaderFile(
 						osg::Shader::FRAGMENT,
+						GetDataPathPrefix() +
 						SCIVIS_SHADER_PREFIX
 						"scivis/scalar_viser/mcsqr_frag.glsl");
 					program = new osg::Program;
@@ -67,15 +71,19 @@ namespace SciVis
 				osg::ref_ptr<osg::Uniform> volStartFromLonZeroUni;
 
 				std::shared_ptr<std::vector<float>> volDat;
+				std::shared_ptr<std::vector<float>> volDatSmoothed;
 
 				osg::ref_ptr<osg::Geometry> geom;
 				osg::ref_ptr<osg::Geode> geode;
 				osg::ref_ptr<osg::Vec3Array> verts;
 
 			public:
-				PerVolParam(decltype(volDat) volDat, const std::array<uint32_t, 3>& volDim,
+				PerVolParam(
+					decltype(volDat) volDat,
+					decltype(volDat) volDatSmoothed,
+					const std::array<uint32_t, 3>& volDim,
 					PerRendererParam* renderer)
-					: volDat(volDat), volDim(volDim)
+					: volDat(volDat), volDatSmoothed(volDatSmoothed), volDim(volDim)
 				{
 					const auto MinHeight = static_cast<float>(osg::WGS_84_RADIUS_EQUATOR) * 1.1f;
 					const auto MaxHeight = static_cast<float>(osg::WGS_84_RADIUS_EQUATOR) * 1.3f;
@@ -192,8 +200,12 @@ namespace SciVis
 				* 参数:
 				* -- isoVal: 产生等值线依据的标量值
 				* -- heights: 需要产生等值线的面的高度
+				* -- useSmoothedVol: 为true时，使用平滑的体数据
 				*/
-				void MarchingSquare(float isoVal, const std::vector<float>& heights)
+				void MarchingSquare(
+					float isoVal,
+					const std::vector<float>& heights,
+					bool useSmoothedVol = false)
 				{
 					this->isoVal = isoVal;
 
@@ -280,7 +292,9 @@ namespace SciVis
 						*  |      |
 						* [0]--0--[1] >
 						*/
-						auto surfStart = volDat->data() + z * volDimYxX;
+						auto surfStart =
+							(useSmoothedVol ? volDatSmoothed->data() : volDat->data())
+							+ z * volDimYxX;
 						std::array<float, 4> val4 = {
 							surfStart[y * volDim[0] + x],
 							surfStart[y * volDim[0] + x + 1],
@@ -391,9 +405,13 @@ namespace SciVis
 			* 参数:
 			* -- name: 添加体的名称。不同体的名称需不同，用于区分
 			* -- volDat: 体数据，需按Z-Y-X的顺序存放体素
+			* -- volDatSmoothed: 光滑处理过的体数据
 			* -- dim: 体数据的三维尺寸（XYZ顺序）
 			*/
-			void AddVolume(const std::string& name, std::shared_ptr<std::vector<float>> volDat,
+			void AddVolume(
+				const std::string& name,
+				std::shared_ptr<std::vector<float>> volDat,
+				std::shared_ptr<std::vector<float>> volDatSmoothed,
 				const std::array<uint32_t, 3>& volDim)
 			{
 				auto itr = vols.find(name);
@@ -402,7 +420,7 @@ namespace SciVis
 					vols.erase(itr);
 				}
 				auto opt = vols.emplace(std::pair<std::string, PerVolParam>
-					(name, PerVolParam(volDat, volDim, &param)));
+					(name, PerVolParam(volDat, volDatSmoothed, volDim, &param)));
 				param.grp->addChild(opt.first->second.geode);
 			}
 			/*
@@ -441,4 +459,4 @@ namespace SciVis
 	} // namespace ScalarViser
 } // namespace SciVis
 
-#endif // !SCIVIS_SCALAR_VISER_MCR_H
+#endif // !SCIVIS_SCALAR_VISER_MARCHING_SQUARE_RENDERER_H

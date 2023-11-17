@@ -34,5 +34,5 @@ void main() {
     float scalar = texture(volTex, vec3(lon, lat, r)).r;
     vec4 col = texture(colTblTex, scalar);
     gl_FragColor.rgb = col.rgb;
-    gl_FragColor.a = 1.f;
+    gl_FragColor.a = .5f;
 }

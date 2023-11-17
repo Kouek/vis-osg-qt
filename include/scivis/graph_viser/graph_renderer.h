@@ -15,6 +15,7 @@
 #include <osg/Geometry>
 #include <osg/Geode>
 #include <osg/LineWidth>
+#include <osg/Material>
 
 namespace SciVis
 {
@@ -23,6 +24,19 @@ namespace SciVis
 
 		class GraphRenderer
 		{
+		public:
+			struct Node
+			{
+				osg::Vec3 pos;
+				osg::Vec3 color;
+			};
+			struct Edge
+			{
+				std::string from;
+				std::string to;
+				std::vector<osg::Vec3> subDivs;
+			};
+
 		private:
 			struct PerRendererParam
 			{
@@ -44,15 +58,15 @@ namespace SciVis
 				float nodeGeomSize;
 				bool volStartFromLonZero;
 
-				std::shared_ptr<std::map<std::string, osg::Vec3>> nodes;
-				std::shared_ptr<std::vector<std::array<std::string, 2>>> edges;
+				std::shared_ptr<std::map<std::string, Node>> nodes;
+				std::shared_ptr<std::vector<Edge>> edges;
 
 				osg::ref_ptr<osg::Group> grp;
 
 			public:
 				PerGraphParam(
-					std::shared_ptr<std::map<std::string, osg::Vec3>> nodes,
-					std::shared_ptr<std::vector<std::array<std::string, 2>>> edges,
+					decltype(nodes) nodes,
+					decltype(edges) edges,
 					PerRendererParam* renderer)
 					: nodes(nodes), edges(edges)
 				{
@@ -68,6 +82,9 @@ namespace SciVis
 					volStartFromLonZero = false;
 
 					grp = new osg::Group;
+
+					auto states = grp->getOrCreateStateSet();
+					states->setMode(GL_DEPTH_TEST, osg::StateAttribute::ON);
 				}
 				void Update()
 				{
@@ -116,44 +133,68 @@ namespace SciVis
 					};
 
 					for (auto itr = nodes->begin(); itr != nodes->end(); ++itr)
-						minMax(itr->second);
+						minMax(itr->second.pos);
 					auto dltPos = maxPos - minPos;
 
 					auto tessl = new osg::TessellationHints;
 					tessl->setDetailRatio(1.f);
 					std::map<std::string, osg::ShapeDrawable*> osgNodes;
 					for (auto itr = nodes->begin(); itr != nodes->end(); ++itr) {
-						auto p = itr->second - minPos;
+						auto p = itr->second.pos - minPos;
 						p.x() = dltPos.x() == 0.f ? p.x() : p.x() / dltPos.x();
 						p.y() = dltPos.y() == 0.f ? p.y() : p.y() / dltPos.y();
 						p.z() = dltPos.z() == 0.f ? p.z() : p.z() / dltPos.z();
-
-						osg::Vec4 color(p.x(), p.y(), p.z(), 1.f);
-
 						p = vec3ToSphere(p);
 
 						auto sphere = new osg::ShapeDrawable(
 							new osg::Sphere(p, .5f * nodeGeomSize), tessl);
-						sphere->setColor(color);
+						sphere->setColor(osg::Vec4(itr->second.color, 1.f));
+
+						auto states = grp->getOrCreateStateSet();
+						auto matr = new osg::Material;
+						matr->setColorMode(osg::Material::DIFFUSE);
+						states->setAttributeAndModes(matr, osg::StateAttribute::ON);
+						states->setMode(GL_LIGHTING, osg::StateAttribute::ON);
 
 						grp->addChild(sphere);
+
 						osgNodes.emplace(std::make_pair(itr->first, sphere));
 					}
 
 					auto segVerts = new osg::Vec3Array;
 					auto segCols = new osg::Vec4Array;
-					for (auto& edge : *edges) {
-						auto node0 = osgNodes.find(edge[0]);
-						auto node1 = osgNodes.find(edge[1]);
-						if (node0 == osgNodes.end() || node1 == osgNodes.end()) continue;
+					for (auto itr = edges->begin(); itr != edges->end(); ++itr) {
+						osg::Vec4 prevColor = osg::Vec4(nodes->at(itr->from).color, 1.f);
+						auto dCol = osg::Vec4(nodes->at(itr->to).color, 1.f) - prevColor;
+						dCol /= (itr->subDivs.size() == 1 ? 1 : itr->subDivs.size() - 1);
 
-						auto sphere0 = reinterpret_cast<osg::Sphere*>(node0->second->getShape());
-						auto sphere1 = reinterpret_cast<osg::Sphere*>(node1->second->getShape());
-						segVerts->push_back(sphere0->getCenter());
-						segVerts->push_back(sphere1->getCenter());
+						osg::Vec3 prevPos;
+						{
+							prevPos = itr->subDivs.front() - minPos;
+							prevPos.x() = dltPos.x() == 0.f ? prevPos.x() : prevPos.x() / dltPos.x();
+							prevPos.y() = dltPos.y() == 0.f ? prevPos.y() : prevPos.y() / dltPos.y();
+							prevPos.z() = dltPos.z() == 0.f ? prevPos.z() : prevPos.z() / dltPos.z();
+							prevPos = vec3ToSphere(prevPos);
+						}
 
-						segCols->push_back(node0->second->getColor() * .75f);
-						segCols->push_back(node1->second->getColor() * .75f);
+						for (size_t i = 1; i < itr->subDivs.size(); ++i) {
+							segVerts->push_back(prevPos);
+							segCols->push_back(prevColor);
+
+							auto p = itr->subDivs[i] - minPos;
+							p.x() = dltPos.x() == 0.f ? p.x() : p.x() / dltPos.x();
+							p.y() = dltPos.y() == 0.f ? p.y() : p.y() / dltPos.y();
+							p.z() = dltPos.z() == 0.f ? p.z() : p.z() / dltPos.z();
+							p = vec3ToSphere(p);
+
+							auto color = prevColor + dCol;
+
+							segVerts->push_back(p);
+							segCols->push_back(color);
+
+							prevPos = p;
+							prevColor = color;
+						}
 					}
 
 					auto geom = new osg::Geometry;
@@ -161,10 +202,10 @@ namespace SciVis
 						geom->setVertexArray(segVerts);
 						geom->setColorArray(segCols);
 						geom->setColorBinding(osg::Geometry::BIND_PER_VERTEX);
-						
+
 						auto states = geom->getOrCreateStateSet();
 						states->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
-						auto lw = new osg::LineWidth(.01f);
+						auto lw = new osg::LineWidth(2.f);
 						states->setAttribute(lw, osg::StateAttribute::ON);
 
 						geom->addPrimitiveSet(new osg::DrawArrays(
@@ -235,8 +276,8 @@ namespace SciVis
 			osg::Group* GetGroup() { return param.grp.get(); }
 			void AddGraph(
 				const std::string& name,
-				std::shared_ptr<std::map<std::string, osg::Vec3>> nodes,
-				std::shared_ptr<std::vector<std::array<std::string, 2>>> edges)
+				std::shared_ptr<std::map<std::string, Node>> nodes,
+				std::shared_ptr<std::vector<Edge>> edges)
 			{
 				auto itr = graphs.find(name);
 				if (itr != graphs.end()) {

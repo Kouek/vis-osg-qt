@@ -1,9 +1,9 @@
 #ifndef SCIVIS_IO_GRAPH_IO_H
 #define SCIVIS_IO_GRAPH_IO_H
 
+#include <algorithm>
 #include <string>
 #include <fstream>
-#include <string>
 #include <cmath>
 
 #include <vector>
@@ -20,6 +20,7 @@ namespace SciVis
 		double x;
 		double y;
 
+
 	public:
 		// Constructors
 		Vec2D() { x = 0.0; y = 0.0; };
@@ -31,6 +32,15 @@ namespace SciVis
 		void setY(const double yy) { y = yy; };
 		void set(const double xx, const double yy) { x = xx; y = yy; };
 		void zero() { x = 0.0; y = 0.0; };
+		Vec2D random(double range)
+		{
+			double lower_bound = -range;
+			double upper_bound = range;
+			double rand_x = (double)rand() / RAND_MAX * (upper_bound - lower_bound) + lower_bound;
+			double rand_y = (double)rand() / RAND_MAX * (upper_bound - lower_bound) + lower_bound;
+
+			return Vec2D(rand_x, rand_y);
+		}
 		// Basic operators
 		Vec2D& operator=(const Vec2D& my_vector)
 		{
@@ -125,15 +135,40 @@ namespace SciVis
 		// Physical properties
 		Vec2D pos;
 		int degree;
+		Vec2D vel;
+		Vec2D acc;
+		Vec2D force;
+		double mass;
+		int radius;
+		double repulsion;
+		double stiffness;
+		double damping;
 
 		Node() {
 			pos.zero();
 			degree = 0;
+			vel = Vec2D().random(1.0);
+			acc = Vec2D().random(1.0);
+			mass = 1.0;
+			radius = 1.0;
+			repulsion = 1.0;
+			stiffness = 1.0;
+			damping = 1.0;
 		};
 		Node(double x, double y) {
 			pos.set(x, y);
 			degree = 0;
+			vel = Vec2D().random(1.0);
+			acc = Vec2D().random(1.0);
+			mass = 1.0;
+			radius = 1.0;
+			repulsion = 1.0;
+			stiffness = 1.0;
+			damping = 1.0;
 		};
+		void changePos(const Vec2D& newPos) {
+			pos = pos + newPos;
+		}
 	};
 	double gauss_weight(int my_dist, double my_sigma)
 	{
@@ -193,7 +228,7 @@ namespace SciVis
 						v1Index++;
 						v2Index++;
 
-						if (v1Index >= subdivs.size() || v2Index >= subdivs.size())
+						if (v1Index >= subdivs.size() || v2Index > subdivs.size())
 							break;
 
 						if (v1Index >= 0)
@@ -216,9 +251,8 @@ namespace SciVis
 			if ((fabs(v.X()) > fabs(v.Y()) && end.X() < start.X())
 				|| (fabs(v.X()) < fabs(v.Y()) && end.Y() < start.Y()))
 			{
-				t = start;
-				start = end;
-				end = t;
+				std::swap(start, end);
+				std::swap(sourceLabel, targetLabel);
 			}
 		};
 

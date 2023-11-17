@@ -1,6 +1,8 @@
 #ifndef TF_WIDGET_H
 #define TF_WIDGET_H
 
+#include <cmath>
+
 #include <array>
 #include <vector>
 
@@ -20,6 +22,15 @@ namespace Ui
 class TransferFunctionWidget : public QWidget
 {
 	Q_OBJECT
+
+public:
+	enum class TFTemplate : int
+	{
+		Custom,
+		BlackWhite,
+		BlueGreenRed,
+		CyanPurpleOrange
+	};
 
 private:
 	class View : public QGraphicsView
@@ -48,7 +59,6 @@ private:
 			AdjustViewportToFit();
 			QGraphicsView::resizeEvent(ev);
 		}
-
 
 		virtual void keyPressEvent(QKeyEvent* ev) override
 		{
@@ -134,7 +144,7 @@ private:
 			}();
 			setPos(validPos);
 
-			auto currScalar = floorf(validPos.x());
+            auto currScalar = floorf(validPos.x());
 			if (currScalar == scalar) {
 				tfWdgt->tfPntsDat[scalar][3] = 1. - validPos.y() / View::AxHeight;
 				tfWdgt->updatePointFromData(scalar);
@@ -152,14 +162,6 @@ private:
 			tfWdgt->TransferFunctionChanged(currScalar, tfWdgt->tfPntsDat[currScalar]);
 			scalar = currScalar;
 		}
-	};
-
-	enum class TFTemplate : int
-	{
-		Custom,
-		BlackWhite,
-		BlueGreenRed,
-		CyanPurpleOrange
 	};
 
 	uint8_t prevScalar;
@@ -255,6 +257,8 @@ public:
 			updatePointFromData(prevScalar);
 
 			prevColor[3] = -1.f; // Çå³ý½»»¥µã
+
+			emit TransferFunctionChanged(prevScalar, GetTransferFunctionPointColor(prevScalar));
 			});
 		connect(ui.pushButton_ColorTFPoint, &QPushButton::clicked, [&]() {
 			QColor prevQCol(
@@ -310,6 +314,11 @@ public:
 
 			emit TransferFunctionChanged(0, GetTransferFunctionPointColor(0));
 			});
+	}
+
+	void SetTFTemplate(TFTemplate tmplt)
+	{
+		ui.comboBox_LoadTFTemplate->setCurrentIndex(static_cast<int>(tmplt));
 	}
 
 	void SetTransferFunctionPointsData(const std::vector<std::pair<uint8_t, std::array<float, 4>>>& tfPntsDat)
@@ -380,6 +389,8 @@ private:
 				scn.removeItem(ptr);
 				pnts[scalar] = nullptr;
 			}
+
+			view.update();
 			return;
 		}
 
@@ -400,6 +411,8 @@ private:
 			ptr->setPos(ptr->pos().x(), View::AxHeight * (1.f - tfPntsDat[scalar][3]));
 			ptr->setBrush(QBrush(color));
 		}
+
+		view.update();
 	}
 
 	void updateTransferFunctionData()

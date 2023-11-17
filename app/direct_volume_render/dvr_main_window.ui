@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>MainWindow</class>
- <widget class="QWidget" name="MainWindow">
+ <class>DVRMainWindow</class>
+ <widget class="QWidget" name="DVRMainWindow">
   <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>480</width>
+    <width>400</width>
     <height>400</height>
    </rect>
   </property>
@@ -100,6 +100,9 @@
         <property name="text">
          <string>使用截面</string>
         </property>
+        <property name="checked">
+         <bool>false</bool>
+        </property>
        </widget>
       </item>
       <item>
@@ -145,7 +148,7 @@
            <double>0.100000000000000</double>
           </property>
           <property name="value">
-           <double>0.500000000000000</double>
+           <double>0.300000000000000</double>
           </property>
          </widget>
         </item>
@@ -210,7 +213,7 @@
            <double>0.100000000000000</double>
           </property>
           <property name="value">
-           <double>0.000000000000000</double>
+           <double>-1.000000000000000</double>
           </property>
          </widget>
         </item>
@@ -263,7 +266,7 @@
            <double>0.100000000000000</double>
           </property>
           <property name="value">
-           <double>0.500000000000000</double>
+           <double>0.600000000000000</double>
           </property>
          </widget>
         </item>
@@ -286,7 +289,7 @@
            <double>0.100000000000000</double>
           </property>
           <property name="value">
-           <double>0.500000000000000</double>
+           <double>0.400000000000000</double>
           </property>
          </widget>
         </item>
@@ -332,7 +335,7 @@
            <double>0.100000000000000</double>
           </property>
           <property name="value">
-           <double>16.000000000000000</double>
+           <double>64.000000000000000</double>
           </property>
          </widget>
         </item>

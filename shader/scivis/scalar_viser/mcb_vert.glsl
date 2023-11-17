@@ -1,4 +1,4 @@
-#version 130 core
+#version 130
 
 out vec3 vertex;
 out vec3 normal;

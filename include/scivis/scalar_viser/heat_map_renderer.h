@@ -11,6 +11,8 @@
 #include <osg/Texture1D>
 #include <osg/Texture3D>
 
+#include <scivis/common/zhongdian15.h>
+
 namespace SciVis
 {
 	namespace ScalarViser
@@ -30,10 +32,12 @@ namespace SciVis
 
 					osg::ref_ptr<osg::Shader> vertShader = osg::Shader::readShaderFile(
 						osg::Shader::VERTEX,
+						GetDataPathPrefix() +
 						SCIVIS_SHADER_PREFIX
 						"scivis/scalar_viser/hmp_vert.glsl");
 					osg::ref_ptr<osg::Shader> fragShader = osg::Shader::readShaderFile(
 						osg::Shader::FRAGMENT,
+						GetDataPathPrefix() +
 						SCIVIS_SHADER_PREFIX
 						"scivis/scalar_viser/hmp_frag.glsl");
 					program = new osg::Program;

@@ -6,6 +6,7 @@
 #include <QtWidgets/qgraphicsview.h>
 
 #include <memory>
+#include <cmath>
 
 #include <array>
 #include <vector>
@@ -49,6 +50,7 @@ private:
 		void AdjustViewportToFit()
 		{
 			fitInView(scene()->itemsBoundingRect(), Qt::KeepAspectRatio);
+			update();
 		}
 
 	protected:

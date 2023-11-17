@@ -1,11 +1,18 @@
-#ifndef DIRECT_VOLUME_RENDER_MAIN_WINDOW_H
-#define DIRECT_VOLUME_RENDER_MAIN_WINDOW_H
+#ifndef HEAT_MAP_MAIN_WINDOW_H
+#define HEAT_MAP_MAIN_WINDOW_H
 
 #include <memory>
 
+#ifdef DEPLOY_ON_ZHONGDIAN15
+#include <grid/ui/uicomctrl/ccusbasedlg.h>
+#else
+#include <QtWidgets/qwidget.h>
+using CCusBaseDlg = QWidget;
+#endif // DEPLOY_ON_ZHONGDIAN15
+
 #include <QtWidgets/qfiledialog.h>
 
-#include <ui_main_window.h>
+#include <ui_hmp_main_window.h>
 
 #include <common_gui/tf_widget.h>
 #include <common_gui/heat_map_widget.h>
@@ -16,10 +23,10 @@
 
 namespace Ui
 {
-	class MainWindow;
+	class HMPMainWindow;
 }
 
-class MainWindow : public QWidget
+class HMPMainWindow : public CCusBaseDlg
 {
 	Q_OBJECT
 
@@ -27,23 +34,27 @@ private:
 	QString tfFilePath;
 	TransferFunctionWidget tfWdgt;
 	HeatMapWidget heatMapWdgt;
-	Ui::MainWindow ui;
+	Ui::HMPMainWindow ui;
 
 	std::shared_ptr<SciVis::ScalarViser::HeatMap3DRenderer> renderer;
 
 public:
-	MainWindow(
+	HMPMainWindow(
 		std::shared_ptr<SciVis::ScalarViser::HeatMap3DRenderer> renderer,
 		QWidget* parent = nullptr)
-		: QWidget(parent), renderer(renderer), heatMapWdgt(500, 500)
+        : CCusBaseDlg(parent), renderer(renderer), heatMapWdgt(500, 500)
 	{
+		setWindowFlags(
+			Qt::WindowMinimizeButtonHint |
+			Qt::WindowCloseButtonHint);
+
 		ui.setupUi(this);
 
 		ui.groupBox_TF->layout()->addWidget(&tfWdgt);
 		ui.groupBox_TF->layout()->addWidget(&heatMapWdgt);
 
-		connect(ui.pushButton_OpenTF, &QPushButton::clicked, this, &MainWindow::openTFFromFile);
-		connect(ui.pushButton_SaveTF, &QPushButton::clicked, this, &MainWindow::saveTFToFile);
+		connect(ui.pushButton_OpenTF, &QPushButton::clicked, this, &HMPMainWindow::openTFFromFile);
+		connect(ui.pushButton_SaveTF, &QPushButton::clicked, this, &HMPMainWindow::saveTFToFile);
 
 		connect(&tfWdgt, &TransferFunctionWidget::TransferFunctionChanged,
 			[&]() {
@@ -86,6 +97,11 @@ public:
 	void SetVolume(std::shared_ptr<std::vector<float>> volDat, const std::array<uint32_t, 3>& dim)
 	{
 		heatMapWdgt.SetVolume(volDat, dim);
+	}
+
+	void SetTFTemplate(TransferFunctionWidget::TFTemplate tmplt)
+	{
+		tfWdgt.SetTFTemplate(tmplt);
 	}
 
 private:
@@ -140,4 +156,4 @@ private:
 	}
 };
 
-#endif // !DIRECT_VOLUME_RENDER_MAIN_WINDOW_H
+#endif // !HEAT_MAP_MAIN_WINDOW_H

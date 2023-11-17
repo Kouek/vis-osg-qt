@@ -3,6 +3,7 @@
 
 #include <string>
 
+#include <array>
 #include <map>
 
 #include <osg/CullFace>
@@ -12,6 +13,7 @@
 #include <osg/Texture3D>
 
 #include <scivis/common/callback.h>
+#include <scivis/common/zhongdian15.h>
 
 namespace SciVis
 {
@@ -42,7 +44,8 @@ namespace SciVis
 				osg::ref_ptr<osg::Uniform> dt;
 				osg::ref_ptr<osg::Uniform> maxStepCnt;
 				osg::ref_ptr<osg::Uniform> useSlice;
-				
+				osg::ref_ptr<osg::Uniform> useDownSample;
+
 				osg::ref_ptr<osg::Uniform> useShading;
 				osg::ref_ptr<osg::Uniform> ka;
 				osg::ref_ptr<osg::Uniform> kd;
@@ -53,15 +56,27 @@ namespace SciVis
 				class Callback : public osg::NodeCallback
 				{
 				private:
-					osg::ref_ptr<osg::Uniform> eyePos;
+					osg::Vec3 eyePos;
+
+					osg::ref_ptr<osg::Uniform> eyePosUni;
+					osg::ref_ptr<osg::Uniform> useDownSampleUni;
 
 				public:
-					Callback(osg::ref_ptr<osg::Uniform> eyePos) : eyePos(eyePos)
+					Callback(
+						osg::ref_ptr<osg::Uniform> eyePosUni,
+						osg::ref_ptr<osg::Uniform> useDownSampleUni)
+						: eyePosUni(eyePosUni), useDownSampleUni(useDownSampleUni)
 					{}
 					virtual void operator()(osg::Node* node, osg::NodeVisitor* nv)
 					{
-						auto _eyePos = nv->getEyePoint();
-						eyePos->setUpdateCallback(new UniformUpdateCallback<osg::Vec3>(_eyePos));
+						auto eyePos = nv->getEyePoint();
+						eyePosUni->set(eyePos);
+
+						if (this->eyePos != eyePos)
+							useDownSampleUni->set(1);
+						else
+							useDownSampleUni->set(0);
+						this->eyePos = eyePos;
 
 						traverse(node, nv);
 					}
@@ -73,10 +88,12 @@ namespace SciVis
 
 					osg::ref_ptr<osg::Shader> vertShader = osg::Shader::readShaderFile(
 						osg::Shader::VERTEX,
+						GetDataPathPrefix() +
 						SCIVIS_SHADER_PREFIX
 						"scivis/scalar_viser/dvr_vert.glsl");
 					osg::ref_ptr<osg::Shader> fragShader = osg::Shader::readShaderFile(
 						osg::Shader::FRAGMENT,
+						GetDataPathPrefix() +
 						SCIVIS_SHADER_PREFIX
 						"scivis/scalar_viser/dvr_frag.glsl");
 					program = new osg::Program;
@@ -90,6 +107,7 @@ namespace SciVis
 					STATEMENT(useSlice, 0);
 					STATEMENT(sliceCntr, osg::Vec3());
 					STATEMENT(sliceDir, osg::Vec3());
+					STATEMENT(useDownSample, 0);
 
 					STATEMENT(useShading, 0);
 					STATEMENT(ka, .5f);
@@ -99,7 +117,7 @@ namespace SciVis
 					STATEMENT(lightPos, osg::Vec3());
 #undef STATEMENT
 
-					grp->setCullCallback(new Callback(eyePos));
+					grp->setCullCallback(new Callback(eyePos, useDownSample));
 				}
 			};
 			PerRendererParam param;
@@ -116,12 +134,16 @@ namespace SciVis
 				osg::ref_ptr<osg::Uniform> maxHeight;
 				osg::ref_ptr<osg::Uniform> volStartFromZeroLon;
 				osg::ref_ptr<osg::Uniform> rotMat;
+				osg::ref_ptr<osg::Uniform> dSamplePos;
 
 				osg::ref_ptr<osg::ShapeDrawable> sphere;
 				osg::ref_ptr<osg::Texture3D> volTex;
 				osg::ref_ptr<osg::Texture1D> tfTex;
 
-				PerVolParam(osg::ref_ptr<osg::Texture3D> volTex, osg::ref_ptr<osg::Texture1D> tfTex,
+				PerVolParam(
+					osg::ref_ptr<osg::Texture3D> volTex,
+					osg::ref_ptr<osg::Texture1D> tfTex,
+					const std::array<uint32_t, 3>& volDim,
 					PerRendererParam* renderer)
 					: volTex(volTex), tfTex(tfTex)
 				{
@@ -148,6 +170,11 @@ namespace SciVis
 						tmpMat.makeIdentity();
 						STATEMENT(rotMat, tmpMat);
 					}
+					STATEMENT(dSamplePos,
+						osg::Vec3(
+							1.f / volDim[0],
+							1.f / volDim[1],
+							1.f / volDim[2]));
 #undef STATEMENT
 					states->addUniform(renderer->eyePos);
 					states->addUniform(renderer->dt);
@@ -155,6 +182,7 @@ namespace SciVis
 					states->addUniform(renderer->useSlice);
 					states->addUniform(renderer->sliceCntr);
 					states->addUniform(renderer->sliceDir);
+					states->addUniform(renderer->useDownSample);
 
 					states->addUniform(renderer->useShading);
 					states->addUniform(renderer->ka);
@@ -353,17 +381,23 @@ namespace SciVis
 			* -- name: 添加体的名称。不同体的名称需不同，用于区分
 			* -- volTex: 体的OSG三维纹理
 			* -- tfTex: 体的传输函数的OSG一维纹理
+			* -- volDim: 体的三维尺寸
 			* -- isDisplayed: 为true时，体被加入后会被绘制。否则体只被加入绘制组件，但不会被绘制
 			*/
-			void AddVolume(const std::string& name, osg::ref_ptr<osg::Texture3D> volTex,
-				osg::ref_ptr<osg::Texture1D> tfTex, bool isDisplayed = true)
+			void AddVolume(
+				const std::string& name,
+				osg::ref_ptr<osg::Texture3D> volTex,
+				osg::ref_ptr<osg::Texture1D> tfTex,
+				const std::array<uint32_t, 3>& volDim,
+				bool isDisplayed = true)
 			{
 				auto itr = vols.find(name);
 				if (itr != vols.end() && itr->second.isDisplayed) {
 					param.grp->removeChild(itr->second.sphere);
 					vols.erase(itr);
 				}
-				auto opt = vols.emplace(std::pair<std::string, PerVolParam>(name, PerVolParam(volTex, tfTex, &param)));
+				auto opt = vols.emplace(std::pair<std::string, PerVolParam>(
+					name, PerVolParam(volTex, tfTex, volDim, &param)));
 
 				opt.first->second.isDisplayed = isDisplayed;
 				if (isDisplayed)

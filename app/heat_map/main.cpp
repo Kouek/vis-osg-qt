@@ -15,7 +15,7 @@
 #include <scivis/io/vol_osg_io.h>
 #include <scivis/scalar_viser/heat_map_renderer.h>
 
-#include "main_window.h"
+#include "hmp_main_window.h"
 
 static const std::string volPath = DATA_PATH_PREFIX"OSS/OSS000.raw";
 static const std::string volName = "0";
@@ -38,12 +38,9 @@ int main(int argc, char** argv)
 	osg::ref_ptr<osg::Group> grp = new osg::Group;
 	grp->addChild(createEarth());
 
-	std::shared_ptr<SciVis::ScalarViser::HeatMap3DRenderer> hmp
-		= std::make_shared<SciVis::ScalarViser::HeatMap3DRenderer>();
+	auto hmp = std::make_shared<SciVis::ScalarViser::HeatMap3DRenderer>();
 
-	MainWindow mainWnd(hmp);
-	mainWnd.show();
-
+	HMPMainWindow mainWnd(hmp);
 	auto tfTex = mainWnd.GetTFTexture();
 
 	std::string errMsg;
@@ -73,6 +70,7 @@ int main(int argc, char** argv)
 	}
 
 	mainWnd.UpdateFromRenderer();
+	mainWnd.show();
 
 	grp->addChild(hmp->GetGroup());
 	viewer->setSceneData(grp);

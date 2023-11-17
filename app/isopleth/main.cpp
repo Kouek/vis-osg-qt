@@ -15,7 +15,7 @@
 #include <scivis/io/vol_osg_io.h>
 #include <scivis/scalar_viser/marching_square_renderer.h>
 
-#include "main_window.h"
+#include "mcsqr_main_window.h"
 
 static const std::string volPath = DATA_PATH_PREFIX"OSS/OSS000.raw";
 static const std::string volName = "0";
@@ -39,13 +39,11 @@ int main(int argc, char** argv)
 	osg::ref_ptr<osg::Group> grp = new osg::Group;
 	grp->addChild(createEarth());
 
-	std::shared_ptr<SciVis::ScalarViser::MarchingSquareCPURenderer> mcb
-		= std::make_shared<SciVis::ScalarViser::MarchingSquareCPURenderer>();
+	auto mcb = std::make_shared<SciVis::ScalarViser::MarchingSquareCPURenderer>();
 	std::shared_ptr<std::vector<float>> heights
 		= std::make_shared<std::vector<float>>();
 
-	MainWindow mainWnd(mcb);
-	mainWnd.show();
+	MCSQRMainWindow mainWnd(mcb);
 
 	std::string errMsg;
 	{
@@ -54,8 +52,10 @@ int main(int argc, char** argv)
 			goto ERR;
 
 		auto volDat = SciVis::Convertor::RAWVolume::U8ToNormalizedFloat(volU8Dat);
+		auto volDatSmoothed = SciVis::Convertor::RAWVolume::RoughFloatToSmooth(volDat, dim);
 		auto volDatShrd = std::make_shared<std::vector<float>>(volDat);
-		mcb->AddVolume(volName, volDatShrd, dim);
+		auto volDatSmoothedShrd = std::make_shared<std::vector<float>>(volDatSmoothed);
+		mcb->AddVolume(volName, volDatShrd, volDatSmoothedShrd, dim);
 
 		auto vol = mcb->GetVolume(volName);
 		vol->SetLongtituteRange(lonRng[0], lonRng[1]);
@@ -72,10 +72,11 @@ int main(int argc, char** argv)
 		}
 		vol->MarchingSquare(30.f / 255.f, *heights);
 
-		mainWnd.SetVolumeAndHeights(volDatShrd, dim, heights);
+		mainWnd.SetVolumeAndHeights(volDatShrd, volDatSmoothedShrd, dim, heights);
 	}
 
 	mainWnd.UpdateFromRenderer();
+	mainWnd.show();
 
 	grp->addChild(mcb->GetGroup());
 	viewer->setSceneData(grp);

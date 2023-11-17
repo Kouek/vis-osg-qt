@@ -15,7 +15,7 @@
 #include <scivis/io/vol_osg_io.h>
 #include <scivis/scalar_viser/direct_volume_renderer.h>
 
-#include "main_window.h"
+#include "dvr_main_window.h"
 
 static const std::array<std::string, 11> volPaths = {
 		DATA_PATH_PREFIX"OSS/OSS000.raw",
@@ -70,7 +70,7 @@ public:
 int main(int argc, char** argv)
 {
 	QApplication app(argc, argv);
-	
+
 	auto* viewer = new osgViewer::Viewer;
 	viewer->setUpViewInWindow(200, 50, 800, 600);
 	auto* manipulator = new osgGA::TrackballManipulator;
@@ -79,14 +79,11 @@ int main(int argc, char** argv)
 	osg::ref_ptr<osg::Group> grp = new osg::Group;
 	grp->addChild(createEarth());
 
-	std::shared_ptr<SciVis::ScalarViser::DirectVolumeRenderer> dvr
-		= std::make_shared<SciVis::ScalarViser::DirectVolumeRenderer>();
+	auto dvr = std::make_shared<SciVis::ScalarViser::DirectVolumeRenderer>();
 	dvr->SetDeltaT(hScale * (hRng[1] - hRng[0]) / dim[2] * .3f);
 	dvr->SetMaxStepCount(800);
 
-	MainWindow mainWnd(dvr);
-	mainWnd.show();
-
+	DVRMainWindow mainWnd(dvr);
 	auto tfTex = mainWnd.GetTFTexture();
 
 	std::string errMsg;
@@ -100,7 +97,7 @@ int main(int argc, char** argv)
 		auto volTex = SciVis::OSGConvertor::RAWVolume::
 			NormalizedFloatToTexture(volDat, dim, log2Dim);
 
-		dvr->AddVolume(volNames[i], volTex, tfTex, false);
+		dvr->AddVolume(volNames[i], volTex, tfTex, dim, false);
 		auto vol = dvr->GetVolume(volNames[i]);
 		vol->SetLongtituteRange(lonRng[0], lonRng[1]);
 		vol->SetLatituteRange(latRng[0], latRng[1]);
@@ -110,11 +107,12 @@ int main(int argc, char** argv)
 	}
 
 	mainWnd.UpdateFromRenderer();
+	mainWnd.show();
 
 	dvr->DisplayVolume(volNames[0]);
 	dvr->GetGroup()->addEventCallback(new DVRSwitchVolumeCallback(dvr));
 	grp->addChild(dvr->GetGroup());
-	
+
 	viewer->setSceneData(grp);
 
 	auto prevClk = clock();

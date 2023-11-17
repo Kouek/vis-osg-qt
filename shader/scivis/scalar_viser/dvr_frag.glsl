@@ -6,6 +6,7 @@ uniform vec3 eyePos;
 uniform vec3 lightPos;
 uniform vec3 sliceCntr;
 uniform vec3 sliceDir;
+uniform vec3 dSamplePos;
 uniform mat3 rotMat;
 uniform float dt;
 uniform float minLatitute;
@@ -22,6 +23,7 @@ uniform int maxStepCnt;
 uniform int volStartFromZeroLon;
 uniform int useSlice;
 uniform int useShading;
+uniform int useDownSample;
 
 varying vec3 vertex;
 
@@ -53,27 +55,6 @@ Hit intersectInnerSphere(vec3 p, vec3 e2pDir) {
 	hit.isHit = 1;
 	hit.tEntry = l - q;
 	return hit;
-}
-
-/*
-* 函数: computeRotMat
-* 功能: 返回经纬高对应的旋转矩阵
-*/
-mat3 computeRotMat(float lon, float lat, float h) {
-	mat3 rotMat;
-	vec3 dir;
-
-	dir.z = h * sin(lat);
-	h = h * cos(lat);
-	dir.y = h * sin(lon);
-	dir.x = h * cos(lon);
-	dir = normalize(dir);
-
-	rotMat[2] = dir;
-	rotMat[0] = cross(vec3(0, 0, 1), dir);
-	rotMat[1] = cross(dir, rotMat[0]);
-	
-	return rotMat;
 }
 
 /*
@@ -291,6 +272,7 @@ void main() {
 		}
 	}
 	// 执行光线传播算法
+	int realMaxStepCnt = maxStepCnt;
 	do {
 		r = sqrt(pos.x * pos.x + pos.y * pos.y);
 		lat = atan(pos.z / r);
@@ -300,8 +282,6 @@ void main() {
 		if (lat < minLatitute || lat > maxLatitute || lon < minLongtitute || lon > maxLongtitute) {}
 		else if (useSlice != 0 && dot(pos - slice.cntr, slice.dir) >= 0) {}
 		else if (useShading != 0) {
-			mat3 currRotMat = computeRotMat(lon, lat, r);
-
 			r = (r - minHeight) / hDlt;
 			lat = (lat - minLatitute) / latDlt;
 			lon = (lon - minLongtitute) / lonDlt;
@@ -310,29 +290,29 @@ void main() {
 				else lon -= .5f;
 
 			vec3 samplePos = vec3(lon, lat, r);
-			vec3 N;
-			N.x = texture(volTex, samplePos + vec3(.5f, 0, 0)).r - texture(volTex, samplePos - vec3(.5f, 0, 0)).r;;
-			N.y = texture(volTex, samplePos + vec3(0, .5f, 0)).r - texture(volTex, samplePos - vec3(0, .5f, 0)).r;;
-			N.z = texture(volTex, samplePos + vec3(0, 0, .5f)).r - texture(volTex, samplePos - vec3(0, 0, .5f)).r;;
-			N = normalize(N);
-			N = currRotMat * N;
-			if (dot(N, d) > 0) N *= -1.f;
-
 			float scalar = texture(volTex, samplePos).r;
 			vec4 tfCol = texture(tfTex, scalar);
+			if (tfCol.a > 0.f) {
+				vec3 N;
+				N.x = texture(volTex, samplePos + vec3(dSamplePos.x, 0, 0)).r - texture(volTex, samplePos - vec3(dSamplePos.x, 0, 0)).r;
+				N.y = texture(volTex, samplePos + vec3(0, dSamplePos.y, 0)).r - texture(volTex, samplePos - vec3(0, dSamplePos.y, 0)).r;
+				N.z = texture(volTex, samplePos + vec3(0, 0, dSamplePos.z)).r - texture(volTex, samplePos - vec3(0, 0, dSamplePos.z)).r;
+				N = rotMat * normalize(N);
+				if (dot(N, d) > 0) N = -N;
 
-			vec3 p2l = normalize(lightPos - pos);
-			vec3 hfDir = .5f * (-d + p2l);
-
-			vec3 ambient = ka * tfCol.rgb;
-			vec3 diffuse = kd * max(0, dot(N, p2l)) * tfCol.rgb;
-			vec3 specular = ks * pow(max(0, dot(N, hfDir)), shininess) * vec3(1.f, 1.f, 1.f);
-			tfCol.rgb = ambient + diffuse + specular;
-
-			color.rgb = color.rgb + (1.f - color.a) * tfCol.a * tfCol.rgb;
-			color.a = color.a + (1.f - color.a) * tfCol.a;
-			if (color.a > .95f)
-				break;
+				vec3 p2l = normalize(lightPos - pos);
+				vec3 hfDir = normalize(-d + p2l);
+				
+				float ambient = ka;
+				float diffuse = kd * max(0, dot(N, p2l));
+				float specular = ks * pow(max(0, dot(N, hfDir)), shininess);
+				tfCol.rgb = (ambient + diffuse + specular) * tfCol.rgb;
+				
+				color.rgb = color.rgb + (1.f - color.a) * tfCol.a * tfCol.rgb;
+				color.a = color.a + (1.f - color.a) * tfCol.a;
+				if (color.a > .95f)
+					break;
+			}
 		}
 		else {
 			r = (r - minHeight) / hDlt;
@@ -344,16 +324,18 @@ void main() {
 
 			float scalar = texture(volTex, vec3(lon, lat, r)).r;
 			vec4 tfCol = texture(tfTex, scalar);
-			color.rgb = color.rgb + (1.f - color.a) * tfCol.a * tfCol.rgb;
-			color.a = color.a + (1.f - color.a) * tfCol.a;
-			if (color.a > .95f)
-				break;
+			if (tfCol.a > 0.f) {
+				color.rgb = color.rgb + (1.f - color.a) * tfCol.a * tfCol.rgb;
+				color.a = color.a + (1.f - color.a) * tfCol.a;
+				if (color.a > .95f)
+					break;
+			}
 		}
 
 		pos += dt * d;
 		tAcc += dt;
 		++stepCnt;
-		if (stepCnt > maxStepCnt) break;
+		if (stepCnt > realMaxStepCnt) break;
 	} while (tAcc < tMax);
 
 	gl_FragColor = color;

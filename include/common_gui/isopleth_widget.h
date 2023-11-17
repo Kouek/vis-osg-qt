@@ -50,6 +50,7 @@ private:
 		void AdjustViewportToFit()
 		{
 			fitInView(scene()->itemsBoundingRect(), Qt::KeepAspectRatio);
+			update();
 		}
 
 	protected:
@@ -60,13 +61,16 @@ private:
 		}
 	};
 
+	bool currUseSmoothedVol;
 	std::array<uint32_t, 3> dim;
 	uint32_t dimYxX;
 	uint32_t currZ;
-	float isoVal;
+	float currIsoVal;
 	osg::Vec2 voxSz;
 	std::array<float, 2> scaleImgToVol;
+	
 	std::shared_ptr<std::vector<float>> volDat;
+	std::shared_ptr<std::vector<float>> volDatSmoothed;
 
 	QGraphicsScene isoplethScn;
 	QImage isopleth;
@@ -78,7 +82,8 @@ public:
 		isopleth(w, h, QImage::Format_RGBA8888),
 		isoplethView(this, w, h)
 	{
-		isoVal = -1.f;
+		currUseSmoothedVol = false;
+		currIsoVal = -1.f;
 
 		setLayout(new QVBoxLayout);
 		layout()->addWidget(&isoplethView);
@@ -89,9 +94,13 @@ public:
 		return dim;
 	}
 
-	void SetVolume(std::shared_ptr<std::vector<float>> volDat, const std::array<uint32_t, 3>& dim)
+	void SetVolume(
+		std::shared_ptr<std::vector<float>> volDat,
+		std::shared_ptr<std::vector<float>> volDatSmoothed,
+		const std::array<uint32_t, 3>& dim)
 	{
 		this->volDat = volDat;
+		this->volDatSmoothed = volDatSmoothed;
 		this->dim = dim;
 
 		dimYxX = static_cast<size_t>(dim[1]) * dim[0];
@@ -103,12 +112,13 @@ public:
 		scaleImgToVol[1] = float(dim[1]) / isopleth.height();
 	}
 
-	void Update(float isoVal, uint32_t volZ)
+	void Update(float isoVal, uint32_t volZ, bool useSmoothedVol = false)
 	{
-		if (this->isoVal != isoVal || currZ != volZ) {
-			this->isoVal = isoVal;
+		if (currUseSmoothedVol != useSmoothedVol || currIsoVal != isoVal || currZ != volZ) {
+			currUseSmoothedVol = useSmoothedVol;
+			currIsoVal = isoVal;
 			currZ = volZ;
-			marchingSquare(isoVal, volZ);
+			marchingSquare();
 		}
 
 		isopleth.fill(Qt::transparent);
@@ -120,7 +130,7 @@ public:
 	}
 
 private:
-	void marchingSquare(float isoVal, uint32_t volZ) {
+	void marchingSquare() {
 		isoplethScn.clear();
 
 		auto volDimYxX = static_cast<size_t>(dim[1]) * dim[0];
@@ -176,7 +186,9 @@ private:
 			*  |      |
 			* [0]--0--[1] >
 			*/
-			auto surfStart = volDat->data() + volZ * volDimYxX;
+			auto surfStart =
+				(currUseSmoothedVol ? volDatSmoothed->data() : volDat->data())
+				+ currZ * volDimYxX;
 			std::array<float, 4> val4 = {
 				surfStart[y * dim[0] + x],
 				surfStart[y * dim[0] + x + 1],
@@ -184,10 +196,10 @@ private:
 				surfStart[(y + 1) * dim[0] + x + 1]
 			};
 			std::array<float, 4> t4 = {
-				(isoVal - val4[0]) / (val4[1] - val4[0]),
-				(isoVal - val4[1]) / (val4[3] - val4[1]),
-				(isoVal - val4[0]) / (val4[2] - val4[0]),
-				(isoVal - val4[2]) / (val4[3] - val4[2])
+				(currIsoVal - val4[0]) / (val4[1] - val4[0]),
+				(currIsoVal - val4[1]) / (val4[3] - val4[1]),
+				(currIsoVal - val4[0]) / (val4[2] - val4[0]),
+				(currIsoVal - val4[2]) / (val4[3] - val4[2])
 			};
 			std::array<osg::Vec2, 4> pos4;
 			pos4[0] = osg::Vec2(x * voxSz.x(), y * voxSz.y());
@@ -202,10 +214,10 @@ private:
 			};
 
 			uint8_t flag = 0;
-			if (val4[0] >= isoVal) flag |= 0b0001;
-			if (val4[1] >= isoVal) flag |= 0b0010;
-			if (val4[2] >= isoVal) flag |= 0b0100;
-			if (val4[3] >= isoVal) flag |= 0b1000;
+			if (val4[0] >= currIsoVal) flag |= 0b0001;
+			if (val4[1] >= currIsoVal) flag |= 0b0010;
+			if (val4[2] >= currIsoVal) flag |= 0b0100;
+			if (val4[3] >= currIsoVal) flag |= 0b1000;
 			switch (flag) {
 			case 0: break;
 			case 1: addTriangle(vert4[0], vert4[2], pos4[0]); break;

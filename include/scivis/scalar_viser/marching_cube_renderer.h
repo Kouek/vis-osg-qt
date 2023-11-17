@@ -1,5 +1,5 @@
-#ifndef SCIVIS_SCALAR_VISER_MCR_H
-#define SCIVIS_SCALAR_VISER_MCR_H
+#ifndef SCIVIS_SCALAR_VISER_MARCHING_CUBE_RENDERER_H
+#define SCIVIS_SCALAR_VISER_MARCHING_CUBE_RENDERER_H
 
 #include <algorithm>
 #include <memory>
@@ -8,12 +8,16 @@
 
 #include <array>
 #include <map>
+#include <unordered_set>
 
 #include <osg/CullFace>
 #include <osg/CoordinateSystemNode>
 #include <osg/Geode>
 #include <osg/Geometry>
 #include <osg/Texture3D>
+
+#include <scivis/common/callback.h>
+#include <scivis/common/zhongdian15.h>
 
 #include "marching_cube_table.h"
 
@@ -22,28 +26,78 @@ namespace SciVis
 	namespace ScalarViser
 	{
 
-		class MarchingCubeCPURenderer
+		class MarchingCubeRenderer
 		{
+		public:
+			struct ShadingParam {
+				bool useShading;
+				float ka;
+				float kd;
+				float ks;
+				float shininess;
+				osg::Vec3 lightPos;
+			};
+
 		private:
 			struct PerRendererParam
 			{
 				osg::ref_ptr<osg::Group> grp;
 				osg::ref_ptr<osg::Program> program;
 
+				osg::ref_ptr<osg::Uniform> eyePos;
+				osg::ref_ptr<osg::Uniform> useShading;
+				osg::ref_ptr<osg::Uniform> ka;
+				osg::ref_ptr<osg::Uniform> kd;
+				osg::ref_ptr<osg::Uniform> ks;
+				osg::ref_ptr<osg::Uniform> shininess;
+				osg::ref_ptr<osg::Uniform> lightPos;
+
+				class Callback : public osg::NodeCallback
+				{
+				private:
+					osg::ref_ptr<osg::Uniform> eyePos;
+
+				public:
+					Callback(osg::ref_ptr<osg::Uniform> eyePos) : eyePos(eyePos)
+					{}
+					virtual void operator()(osg::Node* node, osg::NodeVisitor* nv)
+					{
+						auto _eyePos = nv->getEyePoint();
+						eyePos->setUpdateCallback(new UniformUpdateCallback<osg::Vec3>(_eyePos));
+
+						traverse(node, nv);
+					}
+				};
+
 				PerRendererParam()
 				{
 					grp = new osg::Group;
 					osg::ref_ptr<osg::Shader> vertShader = osg::Shader::readShaderFile(
 						osg::Shader::VERTEX,
+						SciVis::GetDataPathPrefix() +
 						SCIVIS_SHADER_PREFIX
 						"scivis/scalar_viser/mcb_vert.glsl");
 					osg::ref_ptr<osg::Shader> fragShader = osg::Shader::readShaderFile(
 						osg::Shader::FRAGMENT,
+						SciVis::GetDataPathPrefix() +
 						SCIVIS_SHADER_PREFIX
 						"scivis/scalar_viser/mcb_frag.glsl");
 					program = new osg::Program;
 					program->addShader(vertShader);
 					program->addShader(fragShader);
+
+#define STATEMENT(name, val) name = new osg::Uniform(#name, val)
+					STATEMENT(eyePos, osg::Vec3());
+
+					STATEMENT(useShading, 0);
+					STATEMENT(ka, .5f);
+					STATEMENT(kd, .5f);
+					STATEMENT(ks, .5f);
+					STATEMENT(shininess, 16.f);
+					STATEMENT(lightPos, osg::Vec3());
+#undef STATEMENT
+
+					grp->setCullCallback(new Callback(eyePos));
 				}
 			};
 			PerRendererParam param;
@@ -58,8 +112,10 @@ namespace SciVis
 				float minLatitute, maxLatitute;
 				float minHeight, maxHeight;
 				bool volStartFromLonZero;
+				bool useSmoothedVol;
 
 				std::shared_ptr<std::vector<float>> volDat;
+				std::shared_ptr<std::vector<float>> volDatSmoothed;
 
 				osg::ref_ptr<osg::Geometry> geom;
 				osg::ref_ptr<osg::Geode> geode;
@@ -67,9 +123,12 @@ namespace SciVis
 				osg::ref_ptr<osg::Vec3Array> norms;
 
 			public:
-				PerVolParam(decltype(volDat) volDat, const std::array<uint32_t, 3>& volDim,
+				PerVolParam(
+					decltype(volDat) volDat,
+					decltype(volDat) volDatSmoothed,
+					const std::array<uint32_t, 3>& volDim,
 					PerRendererParam* renderer)
-					: volDat(volDat), volDim(volDim)
+					: volDat(volDat), volDatSmoothed(volDatSmoothed), volDim(volDim)
 				{
 					const auto MinHeight = static_cast<float>(osg::WGS_84_RADIUS_EQUATOR) * 1.1f;
 					const auto MaxHeight = static_cast<float>(osg::WGS_84_RADIUS_EQUATOR) * 1.3f;
@@ -81,6 +140,7 @@ namespace SciVis
 					minHeight = MinHeight;
 					maxHeight = MaxHeight;
 					volStartFromLonZero = false;
+					useSmoothedVol = false;
 
 					voxSz = osg::Vec3(1.f / volDim[0], 1.f / volDim[1], 1.f / volDim[2]);
 
@@ -92,6 +152,14 @@ namespace SciVis
 					geode->addDrawable(geom);
 
 					auto states = geode->getOrCreateStateSet();
+
+					states->addUniform(renderer->eyePos);
+					states->addUniform(renderer->useShading);
+					states->addUniform(renderer->ka);
+					states->addUniform(renderer->kd);
+					states->addUniform(renderer->ks);
+					states->addUniform(renderer->shininess);
+					states->addUniform(renderer->lightPos);
 
 					osg::ref_ptr<osg::CullFace> cf = new osg::CullFace(osg::CullFace::BACK);
 					states->setAttributeAndModes(cf);
@@ -117,6 +185,11 @@ namespace SciVis
 					maxLongtitute = deg2Rad(maxLonDeg);
 					return true;
 				}
+				std::array<float, 2> GetLongtituteRange() const
+				{
+					std::array<float, 2> ret{ minLongtitute, maxLongtitute };
+					return ret;
+				}
 				/*
 				* 函数: SetLatituteRange
 				* 功能: 设置该体绘制时的纬度范围（单位为角度）
@@ -135,6 +208,11 @@ namespace SciVis
 					maxLatitute = deg2Rad(maxLatDeg);
 					return true;
 				}
+				std::array<float, 2> GetLatituteRange() const
+				{
+					std::array<float, 2> ret{ minLatitute, maxLatitute };
+					return ret;
+				}
 				/*
 				* 函数: SetHeightFromCenterRange
 				* 功能: 设置该体绘制时的高度（距球心）范围
@@ -152,6 +230,11 @@ namespace SciVis
 					maxHeight = maxH;
 					return true;
 				}
+				std::array<float, 2> GetHeightFromCenterRange() const
+				{
+					std::array<float, 2> ret{ minHeight, maxHeight};
+					return ret;
+				}
 				/*
 				* 函数: SetVolumeStartFromLongtituteZero
 				* 功能: 若全球体数据X=0对应的经度为0度，需要开启该功能
@@ -167,10 +250,15 @@ namespace SciVis
 				* 功能: 在CPU端执行Marching Cube算法，产生等值面
 				* 参数:
 				* -- isoVal: 产生等值面依据的标量值
+				* -- useSmoothedVol: 为true时，使用平滑的体数据
 				*/
-				void MarchingCube(float isoVal)
+				void MarchingCube(float isoVal, bool useSmoothedVol = false)
 				{
+					if (this->isoVal == isoVal && this->useSmoothedVol == useSmoothedVol)
+						return;
+
 					this->isoVal = isoVal;
+					this->useSmoothedVol = useSmoothedVol;
 
 					auto volDimYxX = static_cast<size_t>(volDim[1]) * volDim[0];
 					auto sample = [&](uint32_t x, uint32_t y, uint32_t z) -> float {
@@ -178,6 +266,8 @@ namespace SciVis
 						y = std::min(y, volDim[1] - 1);
 						z = std::min(z, volDim[2] - 1);
 						auto i = z * volDimYxX + y * volDim[0] + x;
+						if (useSmoothedVol)
+							return (*volDatSmoothed)[i];
 						return (*volDat)[i];
 					};
 					auto cmptField = [&](int x, int y, int z)->std::array<float, 8> {
@@ -207,9 +297,9 @@ namespace SciVis
 
 					std::vector<size_t> voxVertNums(volDat->size(), 0);
 					for (size_t i = 0; i < volDat->size(); ++i) {
-						int z = i / volDimYxX;
-						int y = (i - z * volDimYxX) / volDim[0];
-						int x = i - z * volDimYxX - y * volDim[0];
+						uint32_t z = i / volDimYxX;
+						uint32_t y = (i - z * volDimYxX) / volDim[0];
+						uint32_t x = i - z * volDimYxX - y * volDim[0];
 
 						auto field = cmptField(x, y, z);
 						auto cubeIdx = cmptCubeIdx(field);
@@ -228,9 +318,9 @@ namespace SciVis
 						if (voxVertNums[i] == 0)
 							continue;
 
-						int z = i / volDimYxX;
-						int y = (i - z * volDimYxX) / volDim[0];
-						int x = i - z * volDimYxX - y * volDim[0];
+						uint32_t z = i / volDimYxX;
+						uint32_t y = (i - z * volDimYxX) / volDim[0];
+						uint32_t x = i - z * volDimYxX - y * volDim[0];
 
 						std::array<osg::Vec3, 8> v;
 						{
@@ -326,12 +416,12 @@ namespace SciVis
 					return deg * osg::PI / 180.f;
 				};
 
-				friend class MarchingCubeCPURenderer;
+				friend class MarchingCubeRenderer;
 			};
 			std::map<std::string, PerVolParam> vols;
 
 		public:
-			MarchingCubeCPURenderer() {}
+			MarchingCubeRenderer() {}
 
 			/*
 			* 函数: GetGroup
@@ -345,9 +435,13 @@ namespace SciVis
 			* 参数:
 			* -- name: 添加体的名称。不同体的名称需不同，用于区分
 			* -- volDat: 体数据，需按Z-Y-X的顺序存放体素
+			* -- volDatSmoothed: 光滑处理过的体数据
 			* -- dim: 体数据的三维尺寸（XYZ顺序）
 			*/
-			void AddVolume(const std::string& name, std::shared_ptr<std::vector<float>> volDat,
+			void AddVolume(
+				const std::string& name,
+				std::shared_ptr<std::vector<float>> volDat,
+				std::shared_ptr<std::vector<float>> volDatSmoothed,
 				const std::array<uint32_t, 3>& volDim)
 			{
 				auto itr = vols.find(name);
@@ -356,7 +450,7 @@ namespace SciVis
 					vols.erase(itr);
 				}
 				auto opt = vols.emplace(std::pair<std::string, PerVolParam>
-					(name, PerVolParam(volDat, volDim, &param)));
+					(name, PerVolParam(volDat, volDatSmoothed, volDim, &param)));
 				param.grp->addChild(opt.first->second.geode);
 			}
 			/*
@@ -390,9 +484,28 @@ namespace SciVis
 			{
 				return vols.size();
 			}
+			/*
+			* 函数: SetShading
+			* 功能: 设置绘制中的光照着色参数
+			* 参数:
+			* -- param: Blinn-Phong光照着色参数
+			*/
+			void SetShading(const ShadingParam& param)
+			{
+				if (!param.useShading)
+					this->param.useShading->set(0);
+				else {
+					this->param.useShading->set(1);
+					this->param.ka->set(param.ka);
+					this->param.kd->set(param.kd);
+					this->param.ks->set(param.ks);
+					this->param.shininess->set(param.shininess);
+					this->param.lightPos->set(param.lightPos);
+				}
+			}
 		};
 
 	} // namespace ScalarViser
 } // namespace SciVis
 
-#endif // !SCIVIS_SCALAR_VISER_MCR_H
+#endif // !SCIVIS_SCALAR_VISER_MARCHING_CUBE_RENDERER_H
