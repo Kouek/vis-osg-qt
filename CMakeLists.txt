@@ -30,6 +30,7 @@ list(
 	"osgViewer"
 	"osgDB"
 	"osgGA"
+	"OpenThreads"
 )
 
 if ((${CMAKE_BUILD_TYPE} AND ${CMAKE_BUILD_TYPE} STREQUAL "Debug") OR
@@ -46,6 +47,7 @@ else()
 	set(OSG_INC_DIR "${OSG_ROOT}/include")
 	set(OSG_LIB_DIR "${OSG_ROOT}/lib")
 endif()
+message(STATUS "OSG_LIBS: ${OSG_LIBS}")
 # </dep: OSG>
 
 # <lib: CommonGUI>

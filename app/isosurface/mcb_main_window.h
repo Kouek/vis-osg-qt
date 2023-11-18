@@ -55,6 +55,21 @@ public:
 
 		connect(&isoValWdgt, &SliderValWidget::ValueChanged, this, &MCBMainWindow::updateRenderer);
 		connect(ui.checkBox_UseSmoothedVolume, &QCheckBox::stateChanged, this, &MCBMainWindow::updateRenderer);
+		connect(ui.checkBox_MeshSmoothNone, &QCheckBox::stateChanged, this, [&](bool state) {
+			if (!state) return;
+			updateRendererMeshSmoothingType(
+				SciVis::ScalarViser::MarchingCubeRenderer::MeshSmoothingType::None);
+			});
+		connect(ui.checkBox_MeshSmoothLaplacian, &QCheckBox::stateChanged, this, [&](bool state) {
+			if (!state) return;
+			updateRendererMeshSmoothingType(
+				SciVis::ScalarViser::MarchingCubeRenderer::MeshSmoothingType::Laplacian);
+			});
+		connect(ui.checkBox_MeshSmoothCurvature, &QCheckBox::stateChanged, this, [&](bool state) {
+			if (!state) return;
+			updateRendererMeshSmoothingType(
+				SciVis::ScalarViser::MarchingCubeRenderer::MeshSmoothingType::Curvature);
+			});
 
 		connect(ui.checkBox_UseShading, &QCheckBox::stateChanged, [&](int state) {
 			if (state == Qt::Checked) {
@@ -177,6 +192,14 @@ private:
 		renderer->SetShading(shadingParam);
 
 		bgn->second.MarchingCube(val / 255.f, ui.checkBox_UseSmoothedVolume->isChecked());
+	}
+	void updateRendererMeshSmoothingType(
+		SciVis::ScalarViser::MarchingCubeRenderer::MeshSmoothingType type)
+	{
+		if (renderer->GetVolumeNum() == 0) return;
+
+		auto bgn = renderer->GetVolumes().begin();
+		bgn->second.SetMeshSmoothingType(type);
 	}
 
 	static float deg2Rad(float deg)

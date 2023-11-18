@@ -20,7 +20,7 @@ inline osg::Node* createEarth() {
     auto* geode = new osg::Geode;
     geode->addDrawable(sd);
 
-    auto filename = osgDB::findDataFile("land_shallow_topo_2048.jpg");
+    auto filename = osgDB::findDataFile(DATA_PATH_PREFIX"land_shallow_topo_2048.jpg");
     geode->getOrCreateStateSet()->setTextureAttributeAndModes(
         0, new osg::Texture2D(osgDB::readImageFile(filename)));
 

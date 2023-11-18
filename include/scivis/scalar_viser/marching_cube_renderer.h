@@ -8,7 +8,7 @@
 
 #include <array>
 #include <map>
-#include <unordered_set>
+#include <set>
 
 #include <osg/CullFace>
 #include <osg/CoordinateSystemNode>
@@ -20,6 +20,7 @@
 #include <scivis/common/zhongdian15.h>
 
 #include "marching_cube_table.h"
+#include <cassert>
 
 namespace SciVis
 {
@@ -36,6 +37,11 @@ namespace SciVis
 				float ks;
 				float shininess;
 				osg::Vec3 lightPos;
+			};
+			enum class MeshSmoothingType {
+				None,
+				Laplacian,
+				Curvature
 			};
 
 		private:
@@ -113,6 +119,7 @@ namespace SciVis
 				float minHeight, maxHeight;
 				bool volStartFromLonZero;
 				bool useSmoothedVol;
+				MeshSmoothingType meshSmoothingType;
 
 				std::shared_ptr<std::vector<float>> volDat;
 				std::shared_ptr<std::vector<float>> volDatSmoothed;
@@ -120,7 +127,12 @@ namespace SciVis
 				osg::ref_ptr<osg::Geometry> geom;
 				osg::ref_ptr<osg::Geode> geode;
 				osg::ref_ptr<osg::Vec3Array> verts;
+				osg::ref_ptr<osg::Vec3Array> smoothedVerts;
 				osg::ref_ptr<osg::Vec3Array> norms;
+				osg::ref_ptr<osg::Vec3Array> smoothedNorms;
+
+				std::vector<GLuint> vertIndices;
+				std::set<std::array<size_t, 2>> edges;
 
 			public:
 				PerVolParam(
@@ -128,7 +140,8 @@ namespace SciVis
 					decltype(volDat) volDatSmoothed,
 					const std::array<uint32_t, 3>& volDim,
 					PerRendererParam* renderer)
-					: volDat(volDat), volDatSmoothed(volDatSmoothed), volDim(volDim)
+					: volDat(volDat), volDatSmoothed(volDatSmoothed), volDim(volDim),
+					meshSmoothingType(MeshSmoothingType::None)
 				{
 					const auto MinHeight = static_cast<float>(osg::WGS_84_RADIUS_EQUATOR) * 1.1f;
 					const auto MaxHeight = static_cast<float>(osg::WGS_84_RADIUS_EQUATOR) * 1.3f;
@@ -146,6 +159,8 @@ namespace SciVis
 
 					verts = new osg::Vec3Array;
 					norms = new osg::Vec3Array;
+					smoothedVerts = new osg::Vec3Array;
+					smoothedNorms = new osg::Vec3Array;
 
 					geom = new osg::Geometry;
 					geode = new osg::Geode;
@@ -261,6 +276,9 @@ namespace SciVis
 					this->useSmoothedVol = useSmoothedVol;
 
 					auto volDimYxX = static_cast<size_t>(volDim[1]) * volDim[0];
+					auto vox2Flat = [&](uint32_t voxX, uint32_t voxY, uint32_t voxZ) -> size_t {
+						return voxZ * volDimYxX + voxY * volDim[0] + voxX;
+					};
 					auto sample = [&](uint32_t x, uint32_t y, uint32_t z) -> float {
 						x = std::min(x, volDim[0] - 1);
 						y = std::min(y, volDim[1] - 1);
@@ -295,29 +313,61 @@ namespace SciVis
 						return cubeIdx;
 					};
 
-					std::vector<size_t> voxVertNums(volDat->size(), 0);
-					for (size_t i = 0; i < volDat->size(); ++i) {
-						uint32_t z = i / volDimYxX;
-						uint32_t y = (i - z * volDimYxX) / volDim[0];
-						uint32_t x = i - z * volDimYxX - y * volDim[0];
-
-						auto field = cmptField(x, y, z);
-						auto cubeIdx = cmptCubeIdx(field);
-
-						voxVertNums[i] = VertNumTable[cubeIdx];
+					static constexpr auto InvalidVIdx = std::numeric_limits<size_t>::max();
+					auto vertDistSqrEps = std::min(std::min(voxSz.x(), voxSz.y()), voxSz.z()) * .2f;
+					vertDistSqrEps *= vertDistSqrEps;
+					std::vector<std::array<size_t, 12>> vox2VertIndices;
+					{
+						std::array<size_t, 12> arr;
+						arr.fill(std::numeric_limits<size_t>::max());
+						vox2VertIndices.assign(volDimYxX * volDim[0], arr);
 					}
+					auto searchVertIndex = [&](
+						uint32_t voxX, uint32_t voxY, uint32_t voxZ,
+						const osg::Vec3& vert) -> size_t {
+							auto searchVertIndexInVox = [&](
+								uint32_t voxX, uint32_t voxY, uint32_t voxZ) -> size_t {
+									for (auto vIdx :
+										vox2VertIndices[vox2Flat(voxX, voxY, voxZ)]) {
+										if (vIdx == InvalidVIdx) continue;
 
-					auto vertNum = std::accumulate(voxVertNums.begin(), voxVertNums.end(), 0);
+										auto dlt = vert - (*verts)[vIdx];
+										if (dlt * dlt <= vertDistSqrEps)
+											return vIdx;
+									}
+									return InvalidVIdx;
+							};
 
+							// 从范围[(x-1, y-1, z-1), (x,y,z)]的体素所持顶点中，搜寻已经存在的顶点
+							for (int8_t dz = -1; dz < 1; ++dz) {
+								if (voxZ < 1) continue;
+
+								auto newVoxZ = voxZ + dz;
+								for (int8_t dy = -1; dy < 1; ++dy) {
+									if (voxY < 1) continue;
+
+									auto newVoxY = voxY + dy;
+									for (int8_t dx = -1; dx < 1; ++dx) {
+										if (voxX < 1) continue;
+										if (dx == 0 && dy == 0 && dz == 0) continue;
+
+										auto newVoxX = voxX + dx;
+										auto vIdx = searchVertIndexInVox(newVoxX, newVoxY, newVoxZ);
+										if (vIdx != InvalidVIdx)
+											return vIdx;
+									}
+								}
+							}
+
+							return InvalidVIdx;
+					};
+
+					std::vector<uint8_t> vertAdjFaceNum;
 					verts->clear();
-					verts->reserve(vertNum);
 					norms->clear();
-					norms->reserve(vertNum);
-
+					vertIndices.clear();
+					edges.clear();
 					for (size_t i = 0; i < volDat->size(); ++i) {
-						if (voxVertNums[i] == 0)
-							continue;
-
 						uint32_t z = i / volDimYxX;
 						uint32_t y = (i - z * volDimYxX) / volDim[0];
 						uint32_t x = i - z * volDimYxX - y * volDim[0];
@@ -340,7 +390,8 @@ namespace SciVis
 						std::array<osg::Vec3, 12> vertList;
 						auto vertInterp = [&](const osg::Vec3& p0, const osg::Vec3& p1, float f0,
 							float f1) -> osg::Vec3 {
-								float t = (isoVal - f0) / (f1 - f0);
+								auto t = f1 - f0;
+								t = t == 0.f ? 0.f : (isoVal - f0) / t;
 								auto dlt = p1 - p0;
 								return osg::Vec3(p0.x() + t * dlt.x(), p0.y() + t * dlt.y(),
 									p0.z() + t * dlt.z());
@@ -360,50 +411,117 @@ namespace SciVis
 						vertList[10] = vertInterp(v[2], v[6], field[2], field[6]);
 						vertList[11] = vertInterp(v[3], v[7], field[3], field[7]);
 
-						auto vec3ToSphere = [&](const osg::Vec3& v3) -> osg::Vec3 {
-							float dlt = maxLongtitute - minLongtitute;
-							float x = volStartFromLonZero == 0 ? v3.x() :
-								v3.x() < .5f ? v3.x() + .5f : v3.x() - .5f;
-							float lon = minLongtitute + x * dlt;
-							dlt = maxLatitute - minLatitute;
-							float lat = minLatitute + v3.y() * dlt;
-							dlt = maxHeight - minHeight;
-							float h = minHeight + v3.z() * dlt;
+						std::array<size_t, 12> vertIdxList;
+						for (uint8_t i = 0; i < vertIdxList.size(); ++i)
+							vertIdxList[i] = searchVertIndex(x, y, z, vertList[i]);
 
-							osg::Vec3 ret;
-							ret.z() = h * sinf(lat);
-							h = h * cosf(lat);
-							ret.y() = h * sinf(lon);
-							ret.x() = h * cosf(lon);
+						auto addVert = [&](const osg::Vec3& vert, uint8_t edge) -> size_t {
+							auto vIdx = verts->size();
 
-							return ret;
+							verts->push_back(vert);
+							norms->push_back(osg::Vec3(0.f, 0.f, 0.f));
+
+							vertIndices.emplace_back(vIdx);
+							vertAdjFaceNum.emplace_back(1);
+							vertIdxList[edge] = vIdx;
+
+							return vIdx;
 						};
-						for (uint32_t j = 0; j < voxVertNums[i]; j += 3) {
-							auto edge = TriangleTable[cubeIdx][j];
-							verts->push_back(vec3ToSphere(vertList[edge]));
-							edge = TriangleTable[cubeIdx][j + 1];
-							verts->push_back(vec3ToSphere(vertList[edge]));
-							edge = TriangleTable[cubeIdx][j + 2];
-							verts->push_back(vec3ToSphere(vertList[edge]));
+						auto addEdges = [&](std::array<size_t, 3> faceVertIndices) {
+							std::sort(faceVertIndices.begin(), faceVertIndices.end());
+							std::array<size_t, 2> edge = { faceVertIndices[0], faceVertIndices[1] };
+							edges.emplace(edge);
+							edge[1] = faceVertIndices[2];
+							edges.emplace(edge);
+							edge[0] = faceVertIndices[1];
+							edges.emplace(edge);
+						};
+						for (uint32_t i = 0; i < VertNumTable[cubeIdx]; i += 3) {
+							std::array<size_t, 3> faceVertIndices;
+							for (uint8_t j = 0; j < 3; ++j) {
+								auto edge = TriangleTable[cubeIdx][i + j];
+								faceVertIndices[j] = vertIdxList[edge];
+								if (faceVertIndices[j] != InvalidVIdx)
+									vertIndices.emplace_back(faceVertIndices[j]);
+								else
+									faceVertIndices[j] = addVert(vertList[edge], edge);
+							}
 
-							auto n = verts->size();
-							auto e0 = (*verts)[n - 2] - (*verts)[n - 3];
-							auto e1 = (*verts)[n - 1] - (*verts)[n - 3];
-							e0 = e0 ^ e1;
-							e0.normalize();
-							norms->push_back(e0);
-							norms->push_back(e0);
-							norms->push_back(e0);
+							addEdges(faceVertIndices);
+
+							auto e0 = (*verts)[faceVertIndices[1]] - (*verts)[faceVertIndices[0]];
+							auto e1 = (*verts)[faceVertIndices[2]] - (*verts)[faceVertIndices[0]];
+							auto faceNorm = e0 ^ e1;
+							faceNorm.normalize();
+
+							for (uint8_t j = 0; j < 3; ++j) {
+								auto edge = TriangleTable[cubeIdx][i + j];
+								auto vIdx = vertIdxList[edge];
+								(*norms)[vIdx] += faceNorm;
+								++vertAdjFaceNum[vIdx];
+							}
 						}
+						vox2VertIndices[i] = vertIdxList; // 更新体素到顶点索引的映射
 					}
 
-					geom->setVertexArray(verts);
-					geom->setNormalArray(norms);
-					geom->setNormalBinding(osg::Geometry::BIND_PER_VERTEX);
+					auto vec3ToSphere = [&](const osg::Vec3& v3)
+						-> std::tuple<osg::Vec3, osg::Matrix> {
+						float dlt = maxLongtitute - minLongtitute;
+						float x = volStartFromLonZero == 0 ? v3.x() :
+							v3.x() < .5f ? v3.x() + .5f : v3.x() - .5f;
+						float lon = minLongtitute + x * dlt;
+						dlt = maxLatitute - minLatitute;
+						float lat = minLatitute + v3.y() * dlt;
+						dlt = maxHeight - minHeight;
+						float h = minHeight + v3.z() * dlt;
 
-					geom->getPrimitiveSetList().clear();
-					geom->addPrimitiveSet(new osg::DrawArrays(
-						osg::PrimitiveSet::TRIANGLES, 0, verts->size()));
+						osg::Vec3 pos;
+						pos.z() = h * sinf(lat);
+						h = h * cosf(lat);
+						pos.y() = h * sinf(lon);
+						pos.x() = h * cosf(lon);
+
+						osg::Matrix rotMat;
+						auto dir = pos;
+						dir.normalize();
+						rotMat(2, 0) = dir.x();
+						rotMat(2, 1) = dir.y();
+						rotMat(2, 2) = dir.z();
+						rotMat(2, 3) = 0.f;
+						auto tmp = osg::Vec3(0.f, 0.f, 1.f);
+						tmp = tmp ^ dir;
+						rotMat(0, 0) = tmp.x();
+						rotMat(0, 1) = tmp.y();
+						rotMat(0, 2) = tmp.z();
+						rotMat(0, 3) = 0.f;
+						tmp = dir ^ tmp;
+						rotMat(1, 0) = tmp.x();
+						rotMat(1, 1) = tmp.y();
+						rotMat(1, 2) = tmp.z();
+						rotMat(1, 3) = 0.f;
+
+						rotMat(3, 0) = rotMat(3, 1) = rotMat(3, 2) = 0.f;
+						rotMat(3, 3) = 1.f;
+
+						return std::make_tuple(pos, rotMat);
+					};
+					for (size_t i = 0; i < verts->size(); ++i) {
+						auto& vert = (*verts)[i];
+						auto tup = vec3ToSphere(vert);
+						vert = std::get<0>(tup);
+
+						auto& norm = (*norms)[i];
+						norm /= vertAdjFaceNum[i];
+						norm = norm * std::get<1>(tup);
+					}
+
+					updateGeometry();
+				}
+				void SetMeshSmoothingType(MeshSmoothingType type) {
+					if (meshSmoothingType == type) return;
+
+					meshSmoothingType = type;
+					updateGeometry();
 				}
 				float GetIsosurfaceValue() const
 				{
@@ -415,6 +533,79 @@ namespace SciVis
 				{
 					return deg * osg::PI / 180.f;
 				};
+				void updateGeometry() {
+					auto laplacianSmooth = [&]() {
+						for (size_t vIdx = 0; vIdx < verts->size(); ++vIdx) {
+							auto itr = edges.lower_bound(std::array<size_t, 2>{vIdx, 0});
+							assert(itr != edges.end());
+
+							auto& smoothedVert = (*smoothedVerts)[vIdx];
+							auto& smoothedNorm = (*smoothedNorms)[vIdx];
+							int lnkNum = 1;
+							while (itr != edges.end() && (*itr)[0] == vIdx) {
+								smoothedVert += (*verts)[(*itr)[1]];
+								smoothedNorm += (*norms)[(*itr)[1]];
+								++itr;
+								++lnkNum;
+							}
+							smoothedVert /= lnkNum;
+							smoothedNorm /= lnkNum;
+						}
+					};
+					auto curvatureSmooth = [&]() {
+						for (size_t vIdx = 0; vIdx < verts->size(); ++vIdx) {
+							auto itr = edges.lower_bound(std::array<size_t, 2>{vIdx, 0});
+							assert(itr != edges.end());
+
+							auto& smoothedVert = (*smoothedVerts)[vIdx];
+							auto invNorm = -(*smoothedNorms)[vIdx];
+							auto projLen = 0.f;
+							while (itr != edges.end() && (*itr)[0] == vIdx) {
+								auto dlt = (*verts)[(*itr)[1]] - smoothedVert;
+								projLen = std::max(
+									std::abs(dlt * invNorm), projLen);
+								++itr;
+							}
+
+							smoothedVert = smoothedVert + invNorm * projLen;
+						}
+					};
+
+					if (meshSmoothingType != MeshSmoothingType::None)
+						switch (meshSmoothingType) {
+						case MeshSmoothingType::Laplacian:
+						case MeshSmoothingType::Curvature:
+							smoothedVerts->assign(verts->begin(), verts->end());
+							smoothedNorms->assign(norms->begin(), norms->end());
+							break;
+						}
+					switch (meshSmoothingType) {
+					case MeshSmoothingType::Laplacian:
+						laplacianSmooth();
+						break;
+					case MeshSmoothingType::Curvature:
+						curvatureSmooth();
+						break;
+					}
+
+					switch (meshSmoothingType) {
+					case MeshSmoothingType::Laplacian:
+					case MeshSmoothingType::Curvature:
+						geom->setVertexArray(smoothedVerts);
+						geom->setNormalArray(smoothedNorms);
+						break;
+					default:
+						geom->setVertexArray(verts);
+						geom->setNormalArray(norms);
+					}
+
+					geom->setNormalBinding(osg::Geometry::BIND_PER_VERTEX);
+
+					geom->getPrimitiveSetList().clear();
+					geom->addPrimitiveSet(
+						new osg::DrawElementsUInt(
+							GL_TRIANGLES, vertIndices.size(), vertIndices.data()));
+				}
 
 				friend class MarchingCubeRenderer;
 			};
@@ -449,8 +640,10 @@ namespace SciVis
 					param.grp->removeChild(itr->second.geode);
 					vols.erase(itr);
 				}
-				auto opt = vols.emplace(std::pair<std::string, PerVolParam>
-					(name, PerVolParam(volDat, volDatSmoothed, volDim, &param)));
+				auto opt = vols.emplace(
+					std::piecewise_construct,
+					std::forward_as_tuple(name),
+					std::forward_as_tuple(volDat, volDatSmoothed, volDim, &param));
 				param.grp->addChild(opt.first->second.geode);
 			}
 			/*

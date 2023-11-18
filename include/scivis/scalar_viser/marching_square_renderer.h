@@ -419,8 +419,10 @@ namespace SciVis
 					param.grp->removeChild(itr->second.geode);
 					vols.erase(itr);
 				}
-				auto opt = vols.emplace(std::pair<std::string, PerVolParam>
-					(name, PerVolParam(volDat, volDatSmoothed, volDim, &param)));
+				auto opt = vols.emplace(
+					std::piecewise_construct,
+					std::forward_as_tuple(name),
+					std::forward_as_tuple(volDat, volDatSmoothed, volDim, &param));
 				param.grp->addChild(opt.first->second.geode);
 			}
 			/*

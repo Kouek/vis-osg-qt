@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>376</width>
+    <width>480</width>
     <height>300</height>
    </rect>
   </property>
@@ -32,14 +32,56 @@
         <item>
          <widget class="QCheckBox" name="checkBox_UseSmoothedVolume">
           <property name="text">
-           <string>体光滑</string>
+           <string>对体光滑</string>
           </property>
           <property name="checked">
-           <bool>true</bool>
+           <bool>false</bool>
           </property>
          </widget>
         </item>
        </layout>
+      </item>
+      <item>
+       <widget class="QGroupBox" name="groupBox_2">
+        <property name="title">
+         <string>对网格光滑</string>
+        </property>
+        <layout class="QHBoxLayout" name="horizontalLayout_2">
+         <item>
+          <widget class="QCheckBox" name="checkBox_MeshSmoothNone">
+           <property name="text">
+            <string>无</string>
+           </property>
+           <property name="checked">
+            <bool>true</bool>
+           </property>
+           <property name="autoExclusive">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QCheckBox" name="checkBox_MeshSmoothLaplacian">
+           <property name="text">
+            <string>Laplacian法</string>
+           </property>
+           <property name="autoExclusive">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QCheckBox" name="checkBox_MeshSmoothCurvature">
+           <property name="text">
+            <string>Curvature法</string>
+           </property>
+           <property name="autoExclusive">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
       </item>
       <item>
        <widget class="QCheckBox" name="checkBox_UseShading">
@@ -162,7 +204,7 @@
         <item>
          <widget class="QDoubleSpinBox" name="doubleSpinBox_LightPosLon">
           <property name="enabled">
-           <bool>false</bool>
+           <bool>true</bool>
           </property>
           <property name="maximum">
            <double>180.000000000000000</double>
@@ -172,7 +214,7 @@
         <item>
          <widget class="QDoubleSpinBox" name="doubleSpinBox_LightPosLat">
           <property name="enabled">
-           <bool>false</bool>
+           <bool>true</bool>
           </property>
           <property name="minimum">
            <double>-90.000000000000000</double>
@@ -185,7 +227,7 @@
         <item>
          <widget class="QDoubleSpinBox" name="doubleSpinBox_LightPosH">
           <property name="enabled">
-           <bool>false</bool>
+           <bool>true</bool>
           </property>
           <property name="maximum">
            <double>100000000000.000000000000000</double>

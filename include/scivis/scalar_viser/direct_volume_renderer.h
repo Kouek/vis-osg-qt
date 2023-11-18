@@ -396,8 +396,10 @@ namespace SciVis
 					param.grp->removeChild(itr->second.sphere);
 					vols.erase(itr);
 				}
-				auto opt = vols.emplace(std::pair<std::string, PerVolParam>(
-					name, PerVolParam(volTex, tfTex, volDim, &param)));
+				auto opt = vols.emplace(
+					std::piecewise_construct,
+					std::forward_as_tuple(name),
+					std::forward_as_tuple(volTex, tfTex, volDim, &param));
 
 				opt.first->second.isDisplayed = isDisplayed;
 				if (isDisplayed)

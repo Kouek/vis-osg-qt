@@ -284,8 +284,10 @@ namespace SciVis
 					param.grp->removeChild(itr->second.grp);
 					graphs.erase(itr);
 				}
-				auto opt = graphs.emplace(std::pair<std::string, PerGraphParam>
-					(name, PerGraphParam(nodes, edges, &param)));
+				auto opt = graphs.emplace(
+					std::piecewise_construct,
+					std::forward_as_tuple(name),
+					std::forward_as_tuple(nodes, edges, &param));
 				param.grp->addChild(opt.first->second.grp);
 			}
 			PerGraphParam* GetGraph(const std::string& name)
