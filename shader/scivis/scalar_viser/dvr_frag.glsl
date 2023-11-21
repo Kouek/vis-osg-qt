@@ -1,5 +1,8 @@
 #version 130
 
+#define SkipAlpha (.95f)
+#define PI (3.14159f)
+
 uniform sampler3D volTex;
 uniform sampler1D tfTex;
 uniform vec3 eyePos;
@@ -113,7 +116,6 @@ Hit intersectSlice(vec3 e2pDir, SliceOnSphere slice) {
 	return hit;
 }
 
-#define PI 3.14159
 void main() {
 	//#define TEST
 	// ¿ªÆôTESTºê£¬²âÊÔÌÞ³ý¹¦ÄÜ
@@ -281,39 +283,6 @@ void main() {
 
 		if (lat < minLatitute || lat > maxLatitute || lon < minLongtitute || lon > maxLongtitute) {}
 		else if (useSlice != 0 && dot(pos - slice.cntr, slice.dir) >= 0) {}
-		else if (useShading != 0) {
-			r = (r - minHeight) / hDlt;
-			lat = (lat - minLatitute) / latDlt;
-			lon = (lon - minLongtitute) / lonDlt;
-			if (volStartFromZeroLon != 0)
-				if (lon < .5f) lon += .5f;
-				else lon -= .5f;
-
-			vec3 samplePos = vec3(lon, lat, r);
-			float scalar = texture(volTex, samplePos).r;
-			vec4 tfCol = texture(tfTex, scalar);
-			if (tfCol.a > 0.f) {
-				vec3 N;
-				N.x = texture(volTex, samplePos + vec3(dSamplePos.x, 0, 0)).r - texture(volTex, samplePos - vec3(dSamplePos.x, 0, 0)).r;
-				N.y = texture(volTex, samplePos + vec3(0, dSamplePos.y, 0)).r - texture(volTex, samplePos - vec3(0, dSamplePos.y, 0)).r;
-				N.z = texture(volTex, samplePos + vec3(0, 0, dSamplePos.z)).r - texture(volTex, samplePos - vec3(0, 0, dSamplePos.z)).r;
-				N = rotMat * normalize(N);
-				if (dot(N, d) > 0) N = -N;
-
-				vec3 p2l = normalize(lightPos - pos);
-				vec3 hfDir = normalize(-d + p2l);
-				
-				float ambient = ka;
-				float diffuse = kd * max(0, dot(N, p2l));
-				float specular = ks * pow(max(0, dot(N, hfDir)), shininess);
-				tfCol.rgb = (ambient + diffuse + specular) * tfCol.rgb;
-				
-				color.rgb = color.rgb + (1.f - color.a) * tfCol.a * tfCol.rgb;
-				color.a = color.a + (1.f - color.a) * tfCol.a;
-				if (color.a > .95f)
-					break;
-			}
-		}
 		else {
 			r = (r - minHeight) / hDlt;
 			lat = (lat - minLatitute) / latDlt;
@@ -322,13 +291,41 @@ void main() {
 				if (lon < .5f) lon += .5f;
 				else lon -= .5f;
 
-			float scalar = texture(volTex, vec3(lon, lat, r)).r;
-			vec4 tfCol = texture(tfTex, scalar);
-			if (tfCol.a > 0.f) {
-				color.rgb = color.rgb + (1.f - color.a) * tfCol.a * tfCol.rgb;
-				color.a = color.a + (1.f - color.a) * tfCol.a;
-				if (color.a > .95f)
-					break;
+			if (useShading != 0) {
+				vec3 samplePos = vec3(lon, lat, r);
+				float scalar = texture(volTex, samplePos).r;
+				vec4 tfCol = texture(tfTex, scalar);
+				if (tfCol.a > 0.f) {
+					vec3 N;
+					N.x = texture(volTex, samplePos + vec3(dSamplePos.x, 0, 0)).r - texture(volTex, samplePos - vec3(dSamplePos.x, 0, 0)).r;
+					N.y = texture(volTex, samplePos + vec3(0, dSamplePos.y, 0)).r - texture(volTex, samplePos - vec3(0, dSamplePos.y, 0)).r;
+					N.z = texture(volTex, samplePos + vec3(0, 0, dSamplePos.z)).r - texture(volTex, samplePos - vec3(0, 0, dSamplePos.z)).r;
+					N = rotMat * normalize(N);
+					if (dot(N, d) > 0) N = -N;
+
+					vec3 p2l = normalize(lightPos - pos);
+					vec3 hfDir = normalize(-d + p2l);
+
+					float ambient = ka;
+					float diffuse = kd * max(0, dot(N, p2l));
+					float specular = ks * pow(max(0, dot(N, hfDir)), shininess);
+					tfCol.rgb = (ambient + diffuse + specular) * tfCol.rgb;
+
+					color.rgb = color.rgb + (1.f - color.a) * tfCol.a * tfCol.rgb;
+					color.a = color.a + (1.f - color.a) * tfCol.a;
+					if (color.a > SkipAlpha)
+						break;
+				}
+			}
+			else {
+				float scalar = texture(volTex, vec3(lon, lat, r)).r;
+				vec4 tfCol = texture(tfTex, scalar);
+				if (tfCol.a > 0.f) {
+					color.rgb = color.rgb + (1.f - color.a) * tfCol.a * tfCol.rgb;
+					color.a = color.a + (1.f - color.a) * tfCol.a;
+					if (color.a > SkipAlpha)
+						break;
+				}
 			}
 		}
 

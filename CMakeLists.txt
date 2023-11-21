@@ -10,7 +10,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package("Qt5" COMPONENTS "Widgets" REQUIRED)
+find_package("Qt5" COMPONENTS "Core" "Widgets" "Gui" REQUIRED)
 # </dep: Qt>
 
 # <dep: OSG>
@@ -100,7 +100,9 @@ foreach(APP_PATH ${APP_PATHS})
 	target_link_libraries(
 		${APP}
 		PRIVATE
+		"Qt5::Core"
 		"Qt5::Widgets"
+		"Qt5::Gui"
 		${OSG_LIBS}
 	)
 endforeach()

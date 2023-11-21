@@ -50,14 +50,6 @@ public:
 
 		ui.groupBox_TF->layout()->addWidget(&tfWdgt);
 
-		{
-			auto dt = renderer->GetDeltaT();
-			ui.doubleSpinBox_DeltaT->setRange(dt * .1, dt * 10.);
-			ui.doubleSpinBox_DeltaT->setSingleStep(dt * .1);
-			ui.doubleSpinBox_DeltaT->setValue(dt);
-		}
-		ui.spinBox_MaxStepCnt->setValue(renderer->GetMaxStepCount());
-
 		connect(ui.pushButton_OpenTF, &QPushButton::clicked, this, &DVRMainWindow::openTFFromFile);
 		connect(ui.pushButton_SaveTF, &QPushButton::clicked, this, &DVRMainWindow::saveTFToFile);
 
@@ -190,6 +182,14 @@ public:
 
 	void UpdateFromRenderer()
 	{
+		{
+			auto dt = renderer->GetDeltaT();
+			ui.doubleSpinBox_DeltaT->setRange(dt * .1, dt * 10.);
+			ui.doubleSpinBox_DeltaT->setSingleStep(dt * .1);
+			ui.doubleSpinBox_DeltaT->setValue(dt);
+		}
+		ui.spinBox_MaxStepCnt->setValue(renderer->GetMaxStepCount());
+
 		if (renderer->GetVolumeNum() == 0) return;
 
 		auto bgn = renderer->GetVolumes().begin();
@@ -279,9 +279,8 @@ private:
 	{
 		auto tex = GetTFTexture();
 		auto& vols = renderer->GetVolumes();
-		for (auto itr = vols.begin(); itr != vols.end(); ++itr) {
+		for (auto itr = vols.begin(); itr != vols.end(); ++itr)
 			itr->second.SetTransferFunction(tex);
-		}
 
 		renderer->SetDeltaT(ui.doubleSpinBox_DeltaT->value());
 		renderer->SetMaxStepCount(ui.spinBox_MaxStepCnt->value());
