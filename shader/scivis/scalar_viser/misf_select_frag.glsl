@@ -6,9 +6,6 @@
 
 uniform sampler3D volTex;
 uniform vec3 eyePos;
-uniform vec3 lightPos;
-uniform vec3 dSamplePos;
-uniform mat3 rotMat;
 uniform float dt;
 uniform float minLatitute;
 uniform float maxLatitute;
@@ -16,17 +13,10 @@ uniform float minLongtitute;
 uniform float maxLongtitute;
 uniform float minHeight;
 uniform float maxHeight;
-uniform float ka;
-uniform float kd;
-uniform float ks;
-uniform float shininess;
 uniform float sortedIsoVals[MaxIsoValNum];
-uniform vec4 isosurfCols[MaxIsoValNum];
 uniform int isosurfNum;
 uniform int maxStepCnt;
 uniform int volStartFromZeroLon;
-uniform int selectedIsosurfIdx;
-uniform int useShading;
 
 varying vec3 vertex;
 
@@ -128,14 +118,9 @@ void main() {
 				if (lon < .5f) lon += .5f;
 				else lon -= .5f;
 
-			//vec4 isosurfCol = vec4(lon, lat, r, .01f);
-			//color.rgb = color.rgb + (1.f - color.a) * isosurfCol.a * isosurfCol.rgb;
-			//color.a = color.a + (1.f - color.a) * isosurfCol.a;
-			//if (color.a > SkipAlpha)
-			//	break;
-
 			vec3 samplePos = vec3(lon, lat, r);
 			float scalar = texture(volTex, samplePos).r;
+
 			if (prevScalar < 0.f) {
 				prevScalar = scalar;
 				prevSamplePos = samplePos;
@@ -147,40 +132,9 @@ void main() {
 
 				if ((prevScalar <= sortedIsoVals[realIdx] && scalar >= sortedIsoVals[realIdx]) ||
 					(prevScalar >= sortedIsoVals[realIdx] && scalar <= sortedIsoVals[realIdx])) {
-					if (useShading != 0) {
-						float scalarDlt = scalar - prevScalar;
-						vec3 cmptSamplePos =
-							(sortedIsoVals[realIdx] - prevScalar) / scalarDlt * samplePos +
-							(scalar - sortedIsoVals[realIdx]) / scalarDlt * prevSamplePos;
-
-						vec3 N;
-						N.x = texture(volTex, cmptSamplePos + vec3(dSamplePos.x, 0, 0)).r - texture(volTex, cmptSamplePos - vec3(dSamplePos.x, 0, 0)).r;
-						N.y = texture(volTex, cmptSamplePos + vec3(0, dSamplePos.y, 0)).r - texture(volTex, cmptSamplePos - vec3(0, dSamplePos.y, 0)).r;
-						N.z = texture(volTex, cmptSamplePos + vec3(0, 0, dSamplePos.z)).r - texture(volTex, cmptSamplePos - vec3(0, 0, dSamplePos.z)).r;
-						N = rotMat * normalize(N);
-						if (dot(N, d) > 0) N = -N;
-
-						vec3 p2l = normalize(lightPos - pos);
-						vec3 hfDir = normalize(-d + p2l);
-
-						float ambient = ka;
-						float diffuse = kd * max(0, dot(N, p2l));
-						float specular = ks * pow(max(0, dot(N, hfDir)), shininess);
-
-						vec4 isosurfCol = realIdx == selectedIsosurfIdx ?
-							vec4(isosurfCols[realIdx].rgb, 1.f) : isosurfCols[realIdx];
-						isosurfCol.rgb = (ambient + diffuse + specular) * isosurfCol.rgb;
-
-						color.rgb = color.rgb + (1.f - color.a) * isosurfCol.a * isosurfCol.rgb;
-						color.a = color.a + (1.f - color.a) * isosurfCol.a;
-					}
-					else {
-						vec4 isosurfCol = realIdx == selectedIsosurfIdx ?
-							vec4(isosurfCols[realIdx].rgb, 1.f) : isosurfCols[realIdx];
-
-						color.rgb = color.rgb + (1.f - color.a) * isosurfCol.a * isosurfCol.rgb;
-						color.a = color.a + (1.f - color.a) * isosurfCol.a;
-					}
+					color.r = color.g = color.b = sortedIsoVals[realIdx];
+					color.a = 1.f;
+					break;
 				}
 			}
 
@@ -196,5 +150,9 @@ void main() {
 		++stepCnt;
 	} while (tAcc < tExit && stepCnt <= realMaxStepCnt);
 
+	if (color.a == 0.f) {
+		color.r = 1.f;
+		color.a = 1.f;
+	}
 	gl_FragColor = color;
 }

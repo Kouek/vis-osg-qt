@@ -37,7 +37,9 @@ namespace SciVis
 			struct PerRendererParam
 			{
 				osg::ref_ptr<osg::Group> grp;
+				osg::ref_ptr<osg::Group> selectGrp;
 				osg::ref_ptr<osg::Program> program;
+				osg::ref_ptr<osg::Program> selectProgram;
 
 				osg::ref_ptr<osg::Uniform> eyePos;
 				osg::ref_ptr<osg::Uniform> dt;
@@ -74,6 +76,7 @@ namespace SciVis
 				PerRendererParam()
 				{
 					grp = new osg::Group;
+					selectGrp = new osg::Group;
 
 					osg::ref_ptr<osg::Shader> vertShader = osg::Shader::readShaderFile(
 						osg::Shader::VERTEX,
@@ -89,6 +92,15 @@ namespace SciVis
 					program->addShader(vertShader);
 					program->addShader(fragShader);
 
+					fragShader = osg::Shader::readShaderFile(
+						osg::Shader::FRAGMENT,
+						GetDataPathPrefix() +
+						SCIVIS_SHADER_PREFIX
+						"scivis/scalar_viser/misf_select_frag.glsl");
+					selectProgram = new osg::Program;
+					selectProgram->addShader(vertShader);
+					selectProgram->addShader(fragShader);
+
 #define STATEMENT(name, val) name = new osg::Uniform(#name, val)
 					STATEMENT(eyePos, osg::Vec3());
 					STATEMENT(dt, static_cast<float>(osg::WGS_84_RADIUS_EQUATOR) * .008f);
@@ -103,12 +115,14 @@ namespace SciVis
 #undef STATEMENT
 
 					grp->setCullCallback(new Callback(eyePos));
+					selectGrp->setCullCallback(new Callback(eyePos));
 				}
 			};
 			PerRendererParam param;
 
-			struct PerVolParam
+			class PerVolParam
 			{
+				bool inSelectMode = false;
 				bool isDisplayed;
 
 				osg::ref_ptr<osg::Uniform> minLatitute;
@@ -121,18 +135,24 @@ namespace SciVis
 				osg::ref_ptr<osg::Uniform> rotMat;
 				osg::ref_ptr<osg::Uniform> dSamplePos;
 
+				osg::ref_ptr<osg::Uniform> isosurfNum;
 				osg::ref_ptr<osg::Uniform> sortedIsoVals;
 				osg::ref_ptr<osg::Uniform> isosurfCols;
+				osg::ref_ptr<osg::Uniform> selectedIsosurfIdx;
 
 				osg::ref_ptr<osg::ShapeDrawable> sphere;
+				osg::ref_ptr<osg::ShapeDrawable> selectSphere;
 				osg::ref_ptr<osg::Texture3D> volTex;
+				osg::ref_ptr<osg::Texture3D> volTexSmoothed;
 
+			public:
 				PerVolParam(
 					osg::ref_ptr<osg::Texture3D> volTex,
+					osg::ref_ptr<osg::Texture3D> volTexSmoothed,
 					const std::vector<std::tuple<float, std::array<float, 4>>>& sortedIsosurfs,
 					const std::array<uint32_t, 3>& volDim,
 					PerRendererParam* renderer)
-					: volTex(volTex)
+					: volTex(volTex), volTexSmoothed(volTexSmoothed)
 				{
 					const auto MinHeight = static_cast<float>(osg::WGS_84_RADIUS_EQUATOR) * 1.1f;
 					const auto MaxHeight = static_cast<float>(osg::WGS_84_RADIUS_EQUATOR) * 1.3f;
@@ -140,11 +160,9 @@ namespace SciVis
 					auto tessl = new osg::TessellationHints;
 					tessl->setDetailRatio(10.f);
 					sphere = new osg::ShapeDrawable(new osg::Sphere(osg::Vec3(0.f, 0.f, 0.f), MaxHeight), tessl);
+					selectSphere = new osg::ShapeDrawable(*sphere);
 
-					auto states = sphere->getOrCreateStateSet();
-#define STATEMENT(name, val)                                                                       \
-    name = new osg::Uniform(#name, val);                                                           \
-    states->addUniform(name)
+#define STATEMENT(name, val) name = new osg::Uniform(#name, val);
 					STATEMENT(minLatitute, deg2Rad(-10.f));
 					STATEMENT(maxLatitute, deg2Rad(+10.f));
 					STATEMENT(minLongtitute, deg2Rad(-20.f));
@@ -163,38 +181,62 @@ namespace SciVis
 							1.f / volDim[1],
 							1.f / volDim[2]));
 
-					sortedIsoVals = new osg::Uniform(osg::Uniform::FLOAT, "sortedIsoVals", MaxIsoValNum);
-					isosurfCols = new osg::Uniform(osg::Uniform::FLOAT_VEC4, "isosurfCols", MaxIsoValNum);
-					states->addUniform(sortedIsoVals);
-					states->addUniform(isosurfCols);
-					SetIsosurfaces(sortedIsosurfs);
-#undef STATEMENT
-					states->addUniform(renderer->eyePos);
-					states->addUniform(renderer->dt);
-					states->addUniform(renderer->maxStepCnt);
-
-					states->addUniform(renderer->useShading);
-					states->addUniform(renderer->ka);
-					states->addUniform(renderer->kd);
-					states->addUniform(renderer->ks);
-					states->addUniform(renderer->shininess);
-					states->addUniform(renderer->lightPos);
-
-					states->setTextureAttributeAndModes(0, volTex, osg::StateAttribute::ON);
-
 					auto volTexUni = new osg::Uniform(osg::Uniform::SAMPLER_3D, "volTex");
 					volTexUni->set(0);
-					auto tfTexUni = new osg::Uniform(osg::Uniform::SAMPLER_1D, "tfTex");
-					tfTexUni->set(1);
-					states->addUniform(volTexUni);
-					states->addUniform(tfTexUni);
 
-					osg::ref_ptr<osg::CullFace> cf = new osg::CullFace(osg::CullFace::BACK);
-					states->setAttributeAndModes(cf);
+					STATEMENT(isosurfNum, 0);
+					sortedIsoVals = new osg::Uniform(osg::Uniform::FLOAT, "sortedIsoVals", MaxIsoValNum);
+					isosurfCols = new osg::Uniform(osg::Uniform::FLOAT_VEC4, "isosurfCols", MaxIsoValNum);
+					SetIsosurfaces(sortedIsosurfs);
 
-					states->setAttributeAndModes(renderer->program, osg::StateAttribute::ON);
-					states->setMode(GL_BLEND, osg::StateAttribute::ON);
-					states->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
+					STATEMENT(selectedIsosurfIdx, -1);
+#undef STATEMENT
+
+					auto initStates = [&](osg::StateSet* states, bool isSelect) {
+						if (!isSelect) {
+							states->addUniform(rotMat);
+							states->addUniform(dSamplePos);
+							states->addUniform(renderer->useShading);
+							states->addUniform(renderer->ka);
+							states->addUniform(renderer->kd);
+							states->addUniform(renderer->ks);
+							states->addUniform(renderer->shininess);
+							states->addUniform(renderer->lightPos);
+							states->addUniform(isosurfCols);
+							states->addUniform(selectedIsosurfIdx);
+						}
+						states->addUniform(minLatitute);
+						states->addUniform(maxLatitute);
+						states->addUniform(minLongtitute);
+						states->addUniform(maxLongtitute);
+						states->addUniform(minHeight);
+						states->addUniform(maxHeight);
+						states->addUniform(volStartFromZeroLon);
+
+						states->addUniform(sortedIsoVals);
+						states->addUniform(isosurfNum);
+
+						states->addUniform(renderer->eyePos);
+						states->addUniform(renderer->dt);
+						states->addUniform(renderer->maxStepCnt);
+
+						states->setTextureAttributeAndModes(0, volTex, osg::StateAttribute::ON);
+						states->addUniform(volTexUni);
+
+						osg::ref_ptr<osg::CullFace> cf = new osg::CullFace(osg::CullFace::BACK);
+						states->setAttributeAndModes(cf);
+
+						if (!isSelect) {
+							states->setAttributeAndModes(renderer->program, osg::StateAttribute::ON);
+							states->setMode(GL_BLEND, osg::StateAttribute::ON);
+							states->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
+						}
+						else
+							states->setAttributeAndModes(renderer->selectProgram, osg::StateAttribute::ON);
+					};
+
+					initStates(sphere->getOrCreateStateSet(), false);
+					initStates(selectSphere->getOrCreateStateSet(), true);
 				}
 				/*
 				* 函数: SetIsosurfaces
@@ -204,6 +246,7 @@ namespace SciVis
 				*/
 				void SetIsosurfaces(const std::vector<std::tuple<float, std::array<float, 4>>>& sortedIsosurfs)
 				{
+					isosurfNum->set(static_cast<int>(sortedIsosurfs.size()));
 					for (unsigned int i = 0; i < MaxIsoValNum; ++i)
 						if (i < sortedIsosurfs.size()) {
 							auto& isosurf = sortedIsosurfs[i];
@@ -235,6 +278,47 @@ namespace SciVis
 					}
 
 					return ret;
+				}
+				/*
+				* 函数: SelectIsosurface
+				* 功能: 选择一个等值面并突出显示
+				* 参数:
+				* -- isoVal: 等值面的值
+				* -- eps: 值的容差
+				*/
+				void SelectIsosurface(float isoVal, float eps = 1.f / 255.f)
+				{
+					for (int i = 0; i < MaxIsoValNum; ++i) {
+						float _isoVal;
+						sortedIsoVals->getElement(i, _isoVal);
+						if (_isoVal < 0.f) break;
+
+						if (abs(_isoVal - isoVal) <= eps) {
+							selectedIsosurfIdx->set(i);
+							break;
+						}
+					}
+				}
+				void UnselectIsosurface()
+				{
+					selectedIsosurfIdx->set(-1);
+				}
+				/*
+				* 函数: SetUseSmoothedVolume
+				* 功能: 设置是否使用平滑体数据
+				* 参数:
+				* -- useSmoothedVol: 为真时，使用平滑体数据
+				*/
+				void SetUseSmoothedVolume(bool useSmoothedVol)
+				{
+					auto set = [&](osg::StateSet* states) {
+						if (useSmoothedVol)
+							states->setTextureAttributeAndModes(0, volTexSmoothed, osg::StateAttribute::ON);
+						else
+							states->setTextureAttributeAndModes(0, volTex, osg::StateAttribute::ON);
+					};
+					set(sphere->getOrCreateStateSet());
+					set(selectSphere->getOrCreateStateSet());
 				}
 				/*
 				* 函数: SetLongtituteRange
@@ -390,6 +474,10 @@ namespace SciVis
 			{
 				return param.grp.get();
 			}
+			osg::Group* GetSelectGroup()
+			{
+				return param.selectGrp.get();
+			}
 			/*
 			* 函数: AddVolume
 			* 功能: 向该绘制组件添加一个体
@@ -403,6 +491,7 @@ namespace SciVis
 			void AddVolume(
 				const std::string& name,
 				osg::ref_ptr<osg::Texture3D> volTex,
+				osg::ref_ptr<osg::Texture3D> volTexSmoothed,
 				const std::vector<std::tuple<float, std::array<float, 4>>>& sortedIsosurfs,
 				const std::array<uint32_t, 3>& volDim,
 				bool isDisplayed = true)
@@ -410,16 +499,19 @@ namespace SciVis
 				auto itr = vols.find(name);
 				if (itr != vols.end() && itr->second.isDisplayed) {
 					param.grp->removeChild(itr->second.sphere);
+					param.selectGrp->removeChild(itr->second.selectSphere);
 					vols.erase(itr);
 				}
 				auto opt = vols.emplace(
 					std::piecewise_construct,
 					std::forward_as_tuple(name),
-					std::forward_as_tuple(volTex, sortedIsosurfs, volDim, &param));
+					std::forward_as_tuple(volTex, volTexSmoothed, sortedIsosurfs, volDim, &param));
 
 				opt.first->second.isDisplayed = isDisplayed;
-				if (isDisplayed)
+				if (isDisplayed) {
 					param.grp->addChild(opt.first->second.sphere);
+					param.selectGrp->addChild(opt.first->second.selectSphere);
+				}
 			}
 			/*
 			* 函数: DisplayVolume
@@ -433,10 +525,12 @@ namespace SciVis
 					if (itr->first == name) {
 						itr->second.isDisplayed = true;
 						param.grp->addChild(itr->second.sphere);
+						param.selectGrp->addChild(itr->second.selectSphere);
 					}
 					else if (itr->second.isDisplayed == true) {
 						itr->second.isDisplayed = false;
 						param.grp->removeChild(itr->second.sphere);
+						param.selectGrp->removeChild(itr->second.selectSphere);
 					}
 				}
 			}

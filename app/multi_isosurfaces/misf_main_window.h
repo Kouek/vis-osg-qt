@@ -43,6 +43,14 @@ public:
 	{
 		ui.setupUi(this);
 
+		{
+			auto dt = renderer->GetDeltaT();
+			ui.doubleSpinBox_DeltaT->setRange(dt * .1, dt * 10.);
+			ui.doubleSpinBox_DeltaT->setSingleStep(dt * .1);
+			ui.doubleSpinBox_DeltaT->setValue(dt);
+		}
+		ui.spinBox_MaxStepCnt->setValue(renderer->GetMaxStepCount());
+
 		connect(ui.pushButton_AddIsosurf, &QPushButton::clicked, [&]() {
 			bool ok;
 			auto isoVal = QInputDialog::getDouble(
@@ -77,7 +85,7 @@ public:
 			col[1] = newCol.greenF();
 			col[2] = newCol.blueF();
 			col[3] = newCol.alphaF();
-			
+
 			updateIsosurfacesList();
 			updateRenderer();
 			});
@@ -93,6 +101,14 @@ public:
 			updateIsosurfacesList();
 			updateRenderer();
 			});
+
+		connect(ui.checkBox_UseSmoothedVol, &QCheckBox::stateChanged, this, &MISFMainWindow::updateRenderer);
+
+		connect(ui.doubleSpinBox_DeltaT,
+			static_cast<void(QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged),
+			this, &MISFMainWindow::updateRenderer);
+		connect(ui.spinBox_MaxStepCnt, static_cast<void(QSpinBox::*)(int)>(&QSpinBox::valueChanged),
+			this, &MISFMainWindow::updateRenderer);
 
 		connect(ui.checkBox_UseShading, &QCheckBox::stateChanged, [&](int state) {
 			if (state == Qt::Checked) {
@@ -183,16 +199,10 @@ private:
 	void updateRenderer()
 	{
 		auto& vols = renderer->GetVolumes();
-		for (auto itr = vols.begin(); itr != vols.end(); ++itr)
+		for (auto itr = vols.begin(); itr != vols.end(); ++itr) {
 			itr->second.SetIsosurfaces(sortedIsosurfs);
-
-		{
-			auto dt = renderer->GetDeltaT();
-			ui.doubleSpinBox_DeltaT->setRange(dt * .1, dt * 10.);
-			ui.doubleSpinBox_DeltaT->setSingleStep(dt * .1);
-			ui.doubleSpinBox_DeltaT->setValue(dt);
+			itr->second.SetUseSmoothedVolume(ui.checkBox_UseSmoothedVol->isChecked());
 		}
-		ui.spinBox_MaxStepCnt->setValue(renderer->GetMaxStepCount());
 
 		renderer->SetDeltaT(ui.doubleSpinBox_DeltaT->value());
 		renderer->SetMaxStepCount(ui.spinBox_MaxStepCnt->value());

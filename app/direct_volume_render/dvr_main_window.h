@@ -48,6 +48,14 @@ public:
 
 		ui.setupUi(this);
 
+		{
+			auto dt = renderer->GetDeltaT();
+			ui.doubleSpinBox_DeltaT->setRange(dt * .1, dt * 10.);
+			ui.doubleSpinBox_DeltaT->setSingleStep(dt * .1);
+			ui.doubleSpinBox_DeltaT->setValue(dt);
+		}
+		ui.spinBox_MaxStepCnt->setValue(renderer->GetMaxStepCount());
+
 		ui.groupBox_TF->layout()->addWidget(&tfWdgt);
 
 		connect(ui.pushButton_OpenTF, &QPushButton::clicked, this, &DVRMainWindow::openTFFromFile);
@@ -182,14 +190,6 @@ public:
 
 	void UpdateFromRenderer()
 	{
-		{
-			auto dt = renderer->GetDeltaT();
-			ui.doubleSpinBox_DeltaT->setRange(dt * .1, dt * 10.);
-			ui.doubleSpinBox_DeltaT->setSingleStep(dt * .1);
-			ui.doubleSpinBox_DeltaT->setValue(dt);
-		}
-		ui.spinBox_MaxStepCnt->setValue(renderer->GetMaxStepCount());
-
 		if (renderer->GetVolumeNum() == 0) return;
 
 		auto bgn = renderer->GetVolumes().begin();
