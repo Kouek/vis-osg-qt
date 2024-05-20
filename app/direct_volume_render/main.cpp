@@ -85,6 +85,7 @@ int main(int argc, char** argv)
 
 	DVRMainWindow mainWnd(dvr);
 	auto tfTex = mainWnd.GetTFTexture();
+	auto tfTexPreInt = mainWnd.GetPreIntegratedTFTexture();
 
 	std::string errMsg;
 	for (size_t i = 0; i < volPaths.size(); ++i) {
@@ -97,7 +98,7 @@ int main(int argc, char** argv)
 		auto volTex = SciVis::OSGConvertor::RAWVolume::
 			NormalizedFloatToTexture(volDat, dim, log2Dim);
 
-		dvr->AddVolume(volNames[i], volTex, tfTex, dim, false);
+		dvr->AddVolume(volNames[i], volTex, tfTex, tfTexPreInt, dim, false);
 		auto vol = dvr->GetVolume(volNames[i]);
 		vol->SetLongtituteRange(lonRng[0], lonRng[1]);
 		vol->SetLatituteRange(latRng[0], latRng[1]);

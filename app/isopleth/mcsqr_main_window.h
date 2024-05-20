@@ -40,13 +40,13 @@ private:
 	IsoplethWidget isoplethWdgt;
 
 	std::shared_ptr<SciVis::ScalarViser::MarchingSquareCPURenderer> renderer;
-	std::shared_ptr<std::vector<float>> heights;
+	std::shared_ptr<std::vector<uint32_t>> heights;
 
 public:
 	MCSQRMainWindow(
 		std::shared_ptr<SciVis::ScalarViser::MarchingSquareCPURenderer> renderer,
 		QWidget* parent = nullptr)
-        : CCusBaseDlg(parent), isoplethWdgt(500, 500), renderer(renderer)
+		: CCusBaseDlg(parent), isoplethWdgt(500, 500), renderer(renderer)
 	{
 		setWindowFlags(
 			Qt::WindowMinimizeButtonHint |
@@ -70,7 +70,7 @@ public:
 		connect(ui.checkBox_UseSmoothedVolume, &QCheckBox::stateChanged, [&]() {
 			updateRenderer();
 			updateIsoplethWidget();
-		});
+			});
 	}
 
 	void UpdateFromRenderer()
@@ -79,15 +79,6 @@ public:
 
 		auto bgn = renderer->GetVolumes().begin();
 		auto hRng = bgn->second.GetHeightFromCenterRange();
-
-		ui.label_MinH->setText(QString::number(static_cast<int>(floorf(hRng[0]))));
-		ui.label_MaxH->setText(QString::number(static_cast<int>(floorf(hRng[1]))));
-		ui.label_IsoplethH->setText(QString::number(static_cast<int>(floorf(hRng[0]))));
-
-		ui.horizontalSlider_IsoplethH->setRange(
-			static_cast<int>(floorf(hRng[0])),
-			static_cast<int>(floorf(hRng[1])));
-		ui.horizontalSlider_IsoplethH->setValue(static_cast<int>(floorf(hRng[0])));
 
 		isoValWdgt.Set(
 			static_cast<int>(255.f * bgn->second.GetIsoplethValue()),
@@ -100,8 +91,17 @@ public:
 		std::shared_ptr<std::vector<float>> volDat,
 		std::shared_ptr<std::vector<float>> volDatSmoothed,
 		const std::array<uint32_t, 3>& dim,
-		std::shared_ptr<std::vector<float>> heights)
+		std::shared_ptr<std::vector<uint32_t>> heights)
 	{
+		ui.label_MinH->setText(QString::number(static_cast<int>(0)));
+		ui.label_MaxH->setText(QString::number(static_cast<int>(dim[2] - 1)));
+		ui.label_IsoplethH->setText(QString::number(static_cast<int>(0)));
+
+		ui.horizontalSlider_IsoplethH->setRange(
+			static_cast<int>(0),
+			static_cast<int>(dim[2] - 1));
+		ui.horizontalSlider_IsoplethH->setValue(static_cast<int>(0));
+
 		this->heights = heights;
 		isoplethWdgt.SetVolume(volDat, volDatSmoothed, dim);
 	}

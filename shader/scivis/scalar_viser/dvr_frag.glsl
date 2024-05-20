@@ -5,6 +5,7 @@
 
 uniform sampler3D volTex;
 uniform sampler1D tfTex;
+uniform sampler2D tfTexPreInt;
 uniform vec3 eyePos;
 uniform vec3 lightPos;
 uniform vec3 sliceCntr;
@@ -26,7 +27,7 @@ uniform int maxStepCnt;
 uniform int volStartFromZeroLon;
 uniform int useSlice;
 uniform int useShading;
-uniform int useDownSample;
+uniform int usePreIntTF;
 
 varying vec3 vertex;
 
@@ -182,6 +183,7 @@ void main() {
 	// 执行光线传播算法
 	vec4 color = vec4(0, 0, 0, 0);
 	float tAcc = 0.f;
+	float prevScalar = -1.f;
 	int stepCnt = 0;
 	int realMaxStepCnt = maxStepCnt;
 	pos = outerX;
@@ -202,41 +204,44 @@ void main() {
 				if (lon < .5f) lon += .5f;
 				else lon -= .5f;
 
-			if (useShading != 0) {
-				vec3 samplePos = vec3(lon, lat, r);
+			vec4 tfCol;
+			vec3 samplePos = vec3(lon, lat, r);
+			if (usePreIntTF == 0) {
 				float scalar = texture(volTex, samplePos).r;
-				vec4 tfCol = texture(tfTex, scalar);
-				if (tfCol.a > 0.f) {
-					vec3 N;
-					N.x = texture(volTex, samplePos + vec3(dSamplePos.x, 0, 0)).r - texture(volTex, samplePos - vec3(dSamplePos.x, 0, 0)).r;
-					N.y = texture(volTex, samplePos + vec3(0, dSamplePos.y, 0)).r - texture(volTex, samplePos - vec3(0, dSamplePos.y, 0)).r;
-					N.z = texture(volTex, samplePos + vec3(0, 0, dSamplePos.z)).r - texture(volTex, samplePos - vec3(0, 0, dSamplePos.z)).r;
-					N = rotMat * normalize(N);
-					if (dot(N, d) > 0) N = -N;
-
-					vec3 p2l = normalize(lightPos - pos);
-					vec3 hfDir = normalize(-d + p2l);
-
-					float ambient = ka;
-					float diffuse = kd * max(0, dot(N, p2l));
-					float specular = ks * pow(max(0, dot(N, hfDir)), shininess);
-					tfCol.rgb = (ambient + diffuse + specular) * tfCol.rgb;
-
-					color.rgb = color.rgb + (1.f - color.a) * tfCol.a * tfCol.rgb;
-					color.a = color.a + (1.f - color.a) * tfCol.a;
-					if (color.a > SkipAlpha)
-						break;
-				}
+				tfCol = texture(tfTex, scalar);
 			}
 			else {
-				float scalar = texture(volTex, vec3(lon, lat, r)).r;
-				vec4 tfCol = texture(tfTex, scalar);
-				if (tfCol.a > 0.f) {
+				float scalar = texture(volTex, samplePos).r;
+				if (prevScalar < 0.f) prevScalar = scalar;
+				tfCol = texture(tfTexPreInt, vec2(prevScalar, scalar));
+				prevScalar = scalar;
+			}
+
+			if (useShading != 0 && tfCol.a > 0.f) {
+				vec3 N;
+				N.x = texture(volTex, samplePos + vec3(dSamplePos.x, 0, 0)).r - texture(volTex, samplePos - vec3(dSamplePos.x, 0, 0)).r;
+				N.y = texture(volTex, samplePos + vec3(0, dSamplePos.y, 0)).r - texture(volTex, samplePos - vec3(0, dSamplePos.y, 0)).r;
+				N.z = texture(volTex, samplePos + vec3(0, 0, dSamplePos.z)).r - texture(volTex, samplePos - vec3(0, 0, dSamplePos.z)).r;
+				N = rotMat * normalize(N);
+				if (dot(N, d) > 0) N = -N;
+
+				vec3 p2l = normalize(lightPos - pos);
+				vec3 hfDir = normalize(-d + p2l);
+
+				float ambient = ka;
+				float diffuse = kd * max(0, dot(N, p2l));
+				float specular = ks * pow(max(0, dot(N, hfDir)), shininess);
+				tfCol.rgb = (ambient + diffuse + specular) * tfCol.rgb;
+			}
+
+			if (tfCol.a > 0.f) {
+				if (usePreIntTF == 0)
 					color.rgb = color.rgb + (1.f - color.a) * tfCol.a * tfCol.rgb;
-					color.a = color.a + (1.f - color.a) * tfCol.a;
-					if (color.a > SkipAlpha)
-						break;
-				}
+				else
+					color.rgb = color.rgb + (1.f - color.a) * tfCol.rgb;
+				color.a = color.a + (1.f - color.a) * tfCol.a;
+				if (color.a > SkipAlpha)
+					break;
 			}
 		}
 

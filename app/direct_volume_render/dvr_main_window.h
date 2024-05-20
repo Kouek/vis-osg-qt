@@ -61,7 +61,8 @@ public:
 		connect(ui.pushButton_OpenTF, &QPushButton::clicked, this, &DVRMainWindow::openTFFromFile);
 		connect(ui.pushButton_SaveTF, &QPushButton::clicked, this, &DVRMainWindow::saveTFToFile);
 
-		connect(&tfWdgt, &TransferFunctionWidget::TransferFunctionChanged, this, &DVRMainWindow::updateRenderer);
+		connect(ui.checkBox_UsePreIntTF, &QCheckBox::stateChanged, this, &DVRMainWindow::updateRendererTF);
+		connect(&tfWdgt, &TransferFunctionWidget::TransferFunctionChanged, this, &DVRMainWindow::updateRendererTF);
 
 		connect(ui.doubleSpinBox_DeltaT,
 			static_cast<void(QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged),
@@ -163,6 +164,12 @@ public:
 		auto tex = SciVis::OSGConvertor::TransferFunctionPoints::ToTexture(tfPnts);
 		return tex;
 	}
+	osg::ref_ptr<osg::Texture2D> GetPreIntegratedTFTexture() const
+	{
+		auto tfPnts = tfWdgt.GetTransferFunctionPointsData();
+		auto tex = SciVis::OSGConvertor::TransferFunctionPoints::ToPreIntgratedTexture(tfPnts);
+		return tex;
+	}
 
 	struct SliceParam
 	{
@@ -246,17 +253,7 @@ private:
 			this, tr("Open TXT File"), "./", tr("Transfer Function (*.txt)"));
 		if (filePath.isEmpty()) return;
 
-		std::string errMsg;
-		auto pnts = SciVis::Loader::TransferFunctionPoints::LoadFromFile(filePath.toStdString(), &errMsg);
-		if (!errMsg.empty()) {
-			ui.label_OpenedTF->setText(tr(errMsg.c_str()));
-			return;
-		}
-
-		ui.label_OpenedTF->setText(filePath);
-		tfFilePath = filePath;
-
-		tfWdgt.SetTransferFunctionPointsData(pnts);
+		LoadTFFromFile(filePath.toStdString());
 	}
 
 	void saveTFToFile()
@@ -275,15 +272,31 @@ private:
 		updateRenderer();
 	}
 
+	void updateRendererTF()
+	{
+		if (ui.checkBox_UsePreIntTF->isChecked())
+		{
+			auto tex = GetPreIntegratedTFTexture();
+			auto& vols = renderer->GetVolumes();
+			for (auto itr = vols.begin(); itr != vols.end(); ++itr)
+				itr->second.SetPreIntegratedTransferFunction(tex);
+		}
+		else
+		{
+			auto tex = GetTFTexture();
+			auto& vols = renderer->GetVolumes();
+			for (auto itr = vols.begin(); itr != vols.end(); ++itr)
+				itr->second.SetTransferFunction(tex);
+		}
+
+		updateRenderer();
+	}
+
 	void updateRenderer()
 	{
-		auto tex = GetTFTexture();
-		auto& vols = renderer->GetVolumes();
-		for (auto itr = vols.begin(); itr != vols.end(); ++itr)
-			itr->second.SetTransferFunction(tex);
-
 		renderer->SetDeltaT(ui.doubleSpinBox_DeltaT->value());
 		renderer->SetMaxStepCount(ui.spinBox_MaxStepCnt->value());
+		renderer->SetUsePreIntegratedTF(ui.checkBox_UsePreIntTF->isChecked());
 
 		SciVis::ScalarViser::DirectVolumeRenderer::ShadingParam shadingParam;
 		shadingParam.useShading = ui.checkBox_UseShading->isChecked();

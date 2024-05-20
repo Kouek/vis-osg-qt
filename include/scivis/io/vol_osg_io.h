@@ -8,6 +8,41 @@
 
 namespace SciVis
 {
+	namespace OSGLoader {
+		class PointCloud {
+		public:
+			static std::vector<osg::Vec3f> LoadFromFile(const std::string& filePath, std::string* errMsg = nullptr)
+			{
+				std::ifstream is(filePath);
+				if (!is.is_open()) {
+					if (errMsg)
+						*errMsg = "Invalid File Path";
+					return std::vector<osg::Vec3f>();
+				}
+
+				std::string line;
+				std::vector<osg::Vec3f> ret;
+				int flag = 0;
+				while (std::getline(is, line)) {
+					/*if (flag == 0) {
+						flag++;
+						continue;
+					}*/
+					float x, y, z;
+					std::stringstream ss(line);
+					ss >> x;
+					ss >> y;
+					ss >> z;
+					osg::Vec3f point(x, y, z);
+					ret.push_back(point);
+					//flag--;
+				}
+				return ret;
+
+			}
+		};
+	}
+
 	namespace OSGConvertor
 	{
 		class RAWVolume
@@ -44,7 +79,7 @@ namespace SciVis
 
 							auto XYZ2Offs = [&](int x, int y, int z) {
 								return static_cast<size_t>(z) * srcDim[1] * srcDim[0] + y * srcDim[0] + x;
-							};
+								};
 
 							auto srcX1 = srcX == srcDim[0] - 1 ? srcX : srcX + 1;
 							auto srcY1 = srcY == srcDim[1] - 1 ? srcY : srcY + 1;

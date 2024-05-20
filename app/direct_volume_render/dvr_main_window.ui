@@ -55,6 +55,13 @@
      </property>
      <layout class="QVBoxLayout" name="verticalLayout_3">
       <item>
+       <widget class="QCheckBox" name="checkBox_UsePreIntTF">
+        <property name="text">
+         <string>使用预积分传输函数</string>
+        </property>
+       </widget>
+      </item>
+      <item>
        <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="1,2">
         <item>
          <widget class="QLabel" name="label">

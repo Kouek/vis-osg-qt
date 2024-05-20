@@ -10,6 +10,7 @@
 #include <osg/CoordinateSystemNode>
 #include <osg/ShapeDrawable>
 #include <osg/Texture1D>
+#include <osg/Texture2D>
 #include <osg/Texture3D>
 
 #include <scivis/common/callback.h>
@@ -44,7 +45,7 @@ namespace SciVis
 				osg::ref_ptr<osg::Uniform> dt;
 				osg::ref_ptr<osg::Uniform> maxStepCnt;
 				osg::ref_ptr<osg::Uniform> useSlice;
-				osg::ref_ptr<osg::Uniform> useDownSample;
+				osg::ref_ptr<osg::Uniform> usePreIntTF;
 
 				osg::ref_ptr<osg::Uniform> useShading;
 				osg::ref_ptr<osg::Uniform> ka;
@@ -56,27 +57,17 @@ namespace SciVis
 				class Callback : public osg::NodeCallback
 				{
 				private:
-					osg::Vec3 eyePos;
-
 					osg::ref_ptr<osg::Uniform> eyePosUni;
-					osg::ref_ptr<osg::Uniform> useDownSampleUni;
 
 				public:
 					Callback(
-						osg::ref_ptr<osg::Uniform> eyePosUni,
-						osg::ref_ptr<osg::Uniform> useDownSampleUni)
-						: eyePosUni(eyePosUni), useDownSampleUni(useDownSampleUni)
+						osg::ref_ptr<osg::Uniform> eyePosUni)
+						: eyePosUni(eyePosUni)
 					{}
 					virtual void operator()(osg::Node* node, osg::NodeVisitor* nv)
 					{
 						auto eyePos = nv->getEyePoint();
 						eyePosUni->set(eyePos);
-
-						if (this->eyePos != eyePos)
-							useDownSampleUni->set(1);
-						else
-							useDownSampleUni->set(0);
-						this->eyePos = eyePos;
 
 						traverse(node, nv);
 					}
@@ -107,7 +98,7 @@ namespace SciVis
 					STATEMENT(useSlice, 0);
 					STATEMENT(sliceCntr, osg::Vec3());
 					STATEMENT(sliceDir, osg::Vec3());
-					STATEMENT(useDownSample, 0);
+					STATEMENT(usePreIntTF, 0);
 
 					STATEMENT(useShading, 0);
 					STATEMENT(ka, .5f);
@@ -117,7 +108,7 @@ namespace SciVis
 					STATEMENT(lightPos, osg::Vec3());
 #undef STATEMENT
 
-					grp->setCullCallback(new Callback(eyePos, useDownSample));
+					grp->setCullCallback(new Callback(eyePos));
 				}
 			};
 			PerRendererParam param;
@@ -139,13 +130,15 @@ namespace SciVis
 				osg::ref_ptr<osg::ShapeDrawable> sphere;
 				osg::ref_ptr<osg::Texture3D> volTex;
 				osg::ref_ptr<osg::Texture1D> tfTex;
+				osg::ref_ptr<osg::Texture2D> tfTexPreInt;
 
 				PerVolParam(
 					osg::ref_ptr<osg::Texture3D> volTex,
 					osg::ref_ptr<osg::Texture1D> tfTex,
+					osg::ref_ptr<osg::Texture2D> tfTexPreInt,
 					const std::array<uint32_t, 3>& volDim,
 					PerRendererParam* renderer)
-					: volTex(volTex), tfTex(tfTex)
+					: volTex(volTex), tfTex(tfTex), tfTexPreInt(tfTexPreInt)
 				{
 					const auto MinHeight = static_cast<float>(osg::WGS_84_RADIUS_EQUATOR) * 1.1f;
 					const auto MaxHeight = static_cast<float>(osg::WGS_84_RADIUS_EQUATOR) * 1.3f;
@@ -182,7 +175,7 @@ namespace SciVis
 					states->addUniform(renderer->useSlice);
 					states->addUniform(renderer->sliceCntr);
 					states->addUniform(renderer->sliceDir);
-					states->addUniform(renderer->useDownSample);
+					states->addUniform(renderer->usePreIntTF);
 
 					states->addUniform(renderer->useShading);
 					states->addUniform(renderer->ka);
@@ -198,8 +191,11 @@ namespace SciVis
 					volTexUni->set(0);
 					auto tfTexUni = new osg::Uniform(osg::Uniform::SAMPLER_1D, "tfTex");
 					tfTexUni->set(1);
+					auto tfTexPreIntUni = new osg::Uniform(osg::Uniform::SAMPLER_1D, "tfTexPreInt");
+					tfTexPreIntUni->set(2);
 					states->addUniform(volTexUni);
 					states->addUniform(tfTexUni);
+					states->addUniform(tfTexPreIntUni);
 
 					osg::ref_ptr<osg::CullFace> cf = new osg::CullFace(osg::CullFace::BACK);
 					states->setAttributeAndModes(cf);
@@ -219,6 +215,12 @@ namespace SciVis
 					this->tfTex = tfTex;
 					auto states = sphere->getOrCreateStateSet();
 					states->setTextureAttributeAndModes(1, this->tfTex, osg::StateAttribute::ON);
+				}
+				void SetPreIntegratedTransferFunction(osg::ref_ptr<osg::Texture2D> tfTexPreInt)
+				{
+					this->tfTexPreInt = tfTexPreInt;
+					auto states = sphere->getOrCreateStateSet();
+					states->setTextureAttributeAndModes(2, this->tfTexPreInt, osg::StateAttribute::ON);
 				}
 				/*
 				* 函数: SetLongtituteRange
@@ -388,6 +390,7 @@ namespace SciVis
 				const std::string& name,
 				osg::ref_ptr<osg::Texture3D> volTex,
 				osg::ref_ptr<osg::Texture1D> tfTex,
+				osg::ref_ptr<osg::Texture2D> tfTexPreInt,
 				const std::array<uint32_t, 3>& volDim,
 				bool isDisplayed = true)
 			{
@@ -399,7 +402,7 @@ namespace SciVis
 				auto opt = vols.emplace(
 					std::piecewise_construct,
 					std::forward_as_tuple(name),
-					std::forward_as_tuple(volTex, tfTex, volDim, &param));
+					std::forward_as_tuple(volTex, tfTex, tfTexPreInt, volDim, &param));
 
 				opt.first->second.isDisplayed = isDisplayed;
 				if (isDisplayed)
@@ -503,6 +506,14 @@ namespace SciVis
 			void DisableSlicing()
 			{
 				param.useSlice->set(0);
+			}
+			/*
+			* 函数: SetUsePreIntegratedTF
+			* 功能: 设置体绘制是否使用预积分的传输函数
+			*/
+			void SetUsePreIntegratedTF(bool use)
+			{
+				param.usePreIntTF->set(use ? 1 : 0);
 			}
 			/*
 			* 函数: SetShading

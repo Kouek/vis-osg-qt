@@ -7,7 +7,7 @@
 #include <string>
 
 #include <array>
-#include <unordered_set>
+#include <unordered_map>
 #include <map>
 
 #include <osg/CullFace>
@@ -76,6 +76,8 @@ namespace SciVis
 				osg::ref_ptr<osg::Geometry> geom;
 				osg::ref_ptr<osg::Geode> geode;
 				osg::ref_ptr<osg::Vec3Array> verts;
+
+				std::vector<GLuint> vertIndices;
 
 			public:
 				PerVolParam(
@@ -199,33 +201,26 @@ namespace SciVis
 				* 功能: 在CPU端执行Marching Square算法，产生等值线
 				* 参数:
 				* -- isoVal: 产生等值线依据的标量值
-				* -- heights: 需要产生等值线的面的高度
+				* -- heights: 需要产生等值线的面的高度，范围为[0, VolDim.z - 1]
 				* -- useSmoothedVol: 为true时，使用平滑的体数据
 				*/
 				void MarchingSquare(
 					float isoVal,
-					const std::vector<float>& heights,
+					const std::vector<uint32_t>& heights,
 					bool useSmoothedVol = false)
 				{
 					this->isoVal = isoVal;
 
 					auto volDimYxX = static_cast<size_t>(volDim[1]) * volDim[0];
-					auto vertInterp = [&](const osg::Vec2& p0, const osg::Vec2& p1,
-						float t) -> osg::Vec2 {
-							auto oneMinusT = 1.f - t;
-							return osg::Vec2(
-								oneMinusT * p0.x() + t * p1.x(),
-								oneMinusT * p0.y() + t * p1.y());
-					};
-					auto vec2ToSphere = [&](const osg::Vec2& v2, float h) -> osg::Vec3 {
+					auto vec2ToSphere = [&](const osg::Vec3& v3) -> osg::Vec3 {
 						float dlt = maxLongtitute - minLongtitute;
-						float x = volStartFromLonZero == 0 ? v2.x() :
-							v2.x() < .5f ? v2.x() + .5f : v2.x() - .5f;
+						float x = volStartFromLonZero == 0 ? v3.x() :
+							v3.x() < .5f ? v3.x() + .5f : v3.x() - .5f;
 						float lon = minLongtitute + x * dlt;
 						dlt = maxLatitute - minLatitute;
-						float lat = minLatitute + v2.y() * dlt;
+						float lat = minLatitute + v3.y() * dlt;
 						dlt = maxHeight - minHeight;
-						h = minHeight + h * dlt;
+						auto h = minHeight + v3.z() * dlt;
 
 						osg::Vec3 ret;
 						ret.z() = h * sinf(lat);
@@ -234,141 +229,134 @@ namespace SciVis
 						ret.x() = h * cosf(lon);
 
 						return ret;
-					};
-					auto addTriangle = [&](
-						const osg::Vec2& v0, const osg::Vec2& v1,
-						const osg::Vec2& v2, float h) {
-							auto _v0 = vec2ToSphere(v0, h);
-							auto _v1 = vec2ToSphere(v1, h);
-							auto _v2 = vec2ToSphere(v2, h);
-
-							verts->push_back(_v0);
-							verts->push_back(_v1);
-							verts->push_back(_v2);
-					};
-					auto addQuad = [&](
-						const osg::Vec2& v0, const osg::Vec2& v1,
-						const osg::Vec2& v2, const osg::Vec2& v3, float h
-						) {
-							auto _v0 = vec2ToSphere(v0, h);
-							auto _v1 = vec2ToSphere(v1, h);
-							auto _v2 = vec2ToSphere(v2, h);
-							auto _v3 = vec2ToSphere(v3, h);
-
-							verts->push_back(_v0);
-							verts->push_back(_v1);
-							verts->push_back(_v2);
-							verts->push_back(_v0);
-							verts->push_back(_v2);
-							verts->push_back(_v3);
-					};
-					auto addPentagon = [&](
-						const osg::Vec2& v0, const osg::Vec2& v1,
-						const osg::Vec2& v2, const osg::Vec2& v3,
-						const osg::Vec2& v4, float h
-						) {
-							auto _v0 = vec2ToSphere(v0, h);
-							auto _v1 = vec2ToSphere(v1, h);
-							auto _v2 = vec2ToSphere(v2, h);
-							auto _v3 = vec2ToSphere(v3, h);
-							auto _v4 = vec2ToSphere(v4, h);
-
-							verts->push_back(_v0);
-							verts->push_back(_v1);
-							verts->push_back(_v2);
-							verts->push_back(_v0);
-							verts->push_back(_v2);
-							verts->push_back(_v3);
-							verts->push_back(_v0);
-							verts->push_back(_v3);
-							verts->push_back(_v4);
-					};
-					auto mcsqrVox = [&](uint32_t x, uint32_t y, uint32_t z, float h) {
-						/* 下标
-						*  ^
-						* [2]--3--[3]
-						*  |      |
-						*  2      1
-						*  |      |
-						* [0]--0--[1] >
-						*/
-						auto surfStart =
-							(useSmoothedVol ? volDatSmoothed->data() : volDat->data())
-							+ z * volDimYxX;
-						std::array<float, 4> val4 = {
-							surfStart[y * volDim[0] + x],
-							surfStart[y * volDim[0] + x + 1],
-							surfStart[(y + 1) * volDim[0] + x],
-							surfStart[(y + 1) * volDim[0] + x + 1]
-						};
-						std::array<float, 4> t4 = {
-							(isoVal - val4[0]) / (val4[1] - val4[0]),
-							(isoVal - val4[1]) / (val4[3] - val4[1]),
-							(isoVal - val4[0]) / (val4[2] - val4[0]),
-							(isoVal - val4[2]) / (val4[3] - val4[2])
-						};
-						std::array<osg::Vec2, 4> pos4;
-						pos4[0] = osg::Vec2(x * voxSz.x(), y * voxSz.y());
-						pos4[1] = pos4[0] + osg::Vec2(voxSz.x(), 0.f);
-						pos4[2] = pos4[0] + osg::Vec2(0.f, voxSz.y());
-						pos4[3] = pos4[0] + osg::Vec2(voxSz.x(), voxSz.y());
-						std::array<osg::Vec2, 4> vert4 = {
-							vertInterp(pos4[0], pos4[1], t4[0]),
-							vertInterp(pos4[1], pos4[3], t4[1]),
-							vertInterp(pos4[0], pos4[2], t4[2]),
-							vertInterp(pos4[2], pos4[3], t4[3])
 						};
 
-						uint8_t flag = 0;
-						if (val4[0] >= isoVal) flag |= 0b0001;
-						if (val4[1] >= isoVal) flag |= 0b0010;
-						if (val4[2] >= isoVal) flag |= 0b0100;
-						if (val4[3] >= isoVal) flag |= 0b1000;
-						switch (flag) {
-						case 0: break;
-						case 1: addTriangle(vert4[0], vert4[2], pos4[0], h); break;
-						case 2: addTriangle(vert4[1], vert4[0], pos4[1], h); break;
-						case 4: addTriangle(vert4[2], vert4[3], pos4[2], h); break;
-						case 8: addTriangle(vert4[3], vert4[1], pos4[3], h); break;
-						case 3: addQuad(pos4[1], vert4[1], vert4[2], pos4[0], h); break;
-						case 5: addQuad(vert4[0], vert4[3], pos4[2], pos4[0], h); break;
-						case 10: addQuad(pos4[1], pos4[3], vert4[3], vert4[0], h); break;
-						case 12: addQuad(vert4[1], pos4[3], pos4[2], vert4[2], h); break;
-						case  7: addPentagon(pos4[1], vert4[1], vert4[3], pos4[2], pos4[0], h); break;
-						case 11: addPentagon(pos4[3], vert4[3], vert4[2], pos4[0], pos4[1], h); break;
-						case 13: addPentagon(pos4[0], vert4[0], vert4[1], pos4[3], pos4[2], h); break;
-						case 14: addPentagon(pos4[2], vert4[2], vert4[0], pos4[1], pos4[3], h); break;
-						case 6:
-							addTriangle(vert4[1], vert4[0], pos4[1], h);
-							addTriangle(vert4[2], vert4[3], pos4[2], h);
-							break;
-						case 9:
-							addTriangle(vert4[0], vert4[2], pos4[0], h);
-							addTriangle(vert4[3], vert4[1], pos4[3], h);
-							break;
-						}
-					};
+					std::unordered_map<GLuint, GLuint> edge2vertIDs;
+					GLuint prevHeightVertNum = 0;
+					auto addLineSeg = [&](const osg::Vec3ui& startPos, const osg::Vec4f& scalars,
+						const osg::Vec4f& omegas, uint8_t mask) {
+							for (uint8_t i = 0; i < 4; ++i) {
+								if (((mask >> i) & 0b1) == 0)
+									continue;
+
+								// Edge indexed by Start Voxel Position
+								// +----------+
+								// | /*\      |
+								// |  e1      |
+								// |  * e0 *> |
+								// +----------+
+								// *:   startPos
+								// *>:  startPos + (1,0)
+								// /*\: startPos + (0,1)
+								// ID(e0): [ ID(*) : 63bit | 0 : 1bit ]
+								// ID(e1): [ ID(*) : 63bit | 1 : 1bit ]
+								auto edgeID = static_cast<GLuint>(startPos.y() + (i == 2 ? 1 : 0)) * volDim[0] +
+									startPos.x() + (i == 1 ? 1 : 0);
+								edgeID = (edgeID << 1) + (i == 1 || i == 3 ? 1 : 0);
+								auto itr = edge2vertIDs.find(edgeID);
+								if (itr != edge2vertIDs.end()) {
+									vertIndices.push_back(itr->second + prevHeightVertNum);
+									continue;
+								}
+
+								osg::Vec3 pos(startPos.x() + (i == 0 || i == 2 ? omegas[i]
+									: i == 1 ? 1.f
+									: 0.f),
+									startPos.y() + (i == 1 || i == 3 ? omegas[i]
+										: i == 2 ? 1.f
+										: 0.f),
+									startPos.z());
+								for (uint8_t i = 0; i < 3; ++i)
+									pos[i] /= volDim[i];
+
+								vertIndices.push_back(verts->size());
+								verts->push_back(vec2ToSphere(pos));
+								edge2vertIDs.emplace(edgeID, vertIndices.back() - prevHeightVertNum);
+							}
+						};
 
 					verts->clear();
-					std::unordered_set<uint32_t> mcsqredHs;
-					auto hDlt = maxHeight - minHeight;
-					for (size_t hsi = 0; hsi < heights.size(); ++hsi) {
-						auto h = (heights[hsi] - minHeight) / hDlt;
-						if (h < 0.f || h >= 1.f) continue;
-						auto z = static_cast<uint32_t>(h * volDim[2]);
-						if (mcsqredHs.find(z) != mcsqredHs.end()) continue;
-						mcsqredHs.emplace(z);
+					vertIndices.clear();
 
-						for (uint32_t y = 0; y < volDim[1] - 1; ++y)
-							for (uint32_t x = 0; x < volDim[0] - 1; ++x)
-								mcsqrVox(x, y, z, h);
+					osg::Vec3ui pos;
+					for (auto height : heights) {
+						pos.z() = height;
+
+						edge2vertIDs.clear(); // hash map only stores vertices on the same height
+						prevHeightVertNum = verts->size();
+
+						for (pos.y() = 0; pos.y() < volDim[1] - 1; ++pos.y())
+							for (pos.x() = 0; pos.x() < volDim[0] - 1; ++pos.x()) {
+								// Voxels in CCW order form a grid
+								// +------------+
+								// |  3 <--- 2  |
+								// |  |     /|\ |
+								// | \|/     |  |
+								// |  0 ---> 1  |
+								// +------------+
+								uint8_t cornerState = 0;
+								auto surfStart =
+									(useSmoothedVol ? volDatSmoothed->data() : volDat->data())
+									+ pos.z() * volDimYxX;
+								osg::Vec4 scalars(
+									surfStart[pos.y() * volDim[0] + pos.x()],
+									surfStart[pos.y() * volDim[0] + pos.x() + 1],
+									surfStart[(pos.y() + 1) * volDim[0] + pos.x() + 1],
+									surfStart[(pos.y() + 1) * volDim[0] + pos.x()]
+								);
+								for (uint8_t i = 0; i < 4; ++i)
+									if (scalars[i] >= isoVal)
+										cornerState |= 1 << i;
+
+								osg::Vec4 omegas(scalars[0] / (scalars[1] + scalars[0]),
+									scalars[1] / (scalars[2] + scalars[1]),
+									scalars[3] / (scalars[3] + scalars[2]),
+									scalars[0] / (scalars[0] + scalars[3]));
+
+								switch (cornerState) {
+								case 0b0001:
+								case 0b1110:
+									addLineSeg(pos, scalars, omegas, 0b1001);
+									break;
+								case 0b0010:
+								case 0b1101:
+									addLineSeg(pos, scalars, omegas, 0b0011);
+									break;
+								case 0b0011:
+								case 0b1100:
+									addLineSeg(pos, scalars, omegas, 0b1010);
+									break;
+								case 0b0100:
+								case 0b1011:
+									addLineSeg(pos, scalars, omegas, 0b0110);
+									break;
+								case 0b0101:
+									addLineSeg(pos, scalars, omegas, 0b0011);
+									addLineSeg(pos, scalars, omegas, 0b1100);
+									break;
+								case 0b1010:
+									addLineSeg(pos, scalars, omegas, 0b0110);
+									addLineSeg(pos, scalars, omegas, 0b1001);
+									break;
+								case 0b0110:
+								case 0b1001:
+									addLineSeg(pos, scalars, omegas, 0b0101);
+									break;
+								case 0b0111:
+								case 0b1000:
+									addLineSeg(pos, scalars, omegas, 0b1100);
+									break;
+								}
+							}
 					}
+
+					if (vertIndices.empty()) return;
 
 					geom->setVertexArray(verts);
 
 					geom->getPrimitiveSetList().clear();
-					geom->addPrimitiveSet(new osg::DrawArrays(
-						osg::PrimitiveSet::TRIANGLES, 0, verts->size()));
+					geom->addPrimitiveSet(new osg::DrawElementsUInt(
+						GL_LINES, vertIndices.size(), vertIndices.data()));
 				}
 				float GetIsoplethValue() const
 				{

@@ -8,6 +8,7 @@
 
 #include <array>
 #include <map>
+#include <unordered_map>
 #include <set>
 
 #include <osg/CullFace>
@@ -132,7 +133,7 @@ namespace SciVis
 				osg::ref_ptr<osg::Vec3Array> smoothedNorms;
 
 				std::vector<GLuint> vertIndices;
-				std::set<std::array<size_t, 2>> edges;
+				std::set<std::array<GLuint, 2>> edges;
 
 			public:
 				PerVolParam(
@@ -175,9 +176,6 @@ namespace SciVis
 					states->addUniform(renderer->ks);
 					states->addUniform(renderer->shininess);
 					states->addUniform(renderer->lightPos);
-
-					osg::ref_ptr<osg::CullFace> cf = new osg::CullFace(osg::CullFace::BACK);
-					states->setAttributeAndModes(cf);
 
 					states->setMode(GL_DEPTH_TEST, osg::StateAttribute::ON);
 					states->setAttributeAndModes(renderer->program, osg::StateAttribute::ON);
@@ -247,7 +245,7 @@ namespace SciVis
 				}
 				std::array<float, 2> GetHeightFromCenterRange() const
 				{
-					std::array<float, 2> ret{ minHeight, maxHeight};
+					std::array<float, 2> ret{ minHeight, maxHeight };
 					return ret;
 				}
 				/*
@@ -276,196 +274,13 @@ namespace SciVis
 					this->useSmoothedVol = useSmoothedVol;
 
 					auto volDimYxX = static_cast<size_t>(volDim[1]) * volDim[0];
-					auto vox2Flat = [&](uint32_t voxX, uint32_t voxY, uint32_t voxZ) -> size_t {
-						return voxZ * volDimYxX + voxY * volDim[0] + voxX;
-					};
-					auto sample = [&](uint32_t x, uint32_t y, uint32_t z) -> float {
-						x = std::min(x, volDim[0] - 1);
-						y = std::min(y, volDim[1] - 1);
-						z = std::min(z, volDim[2] - 1);
-						auto i = z * volDimYxX + y * volDim[0] + x;
+					auto sample = [&](const osg::Vec3i& pos) -> float {
+						auto i = pos.z() * volDimYxX + pos.y() * volDim[0] + pos.x();
 						if (useSmoothedVol)
 							return (*volDatSmoothed)[i];
 						return (*volDat)[i];
-					};
-					auto cmptField = [&](int x, int y, int z)->std::array<float, 8> {
-						std::array<float, 8> field;
-						field[0] = sample(x + 0, y + 0, z + 0);
-						field[1] = sample(x + 1, y + 0, z + 0);
-						field[2] = sample(x + 1, y + 1, z + 0);
-						field[3] = sample(x + 0, y + 1, z + 0);
-						field[4] = sample(x + 0, y + 0, z + 1);
-						field[5] = sample(x + 1, y + 0, z + 1);
-						field[6] = sample(x + 1, y + 1, z + 1);
-						field[7] = sample(x + 0, y + 1, z + 1);
-						return field;
-					};
-					auto cmptCubeIdx = [&](const std::array<float, 8>& field) -> uint32_t {
-						uint32_t cubeIdx = 0;
-						cubeIdx |= field[0] < isoVal ? (1 << 0) : 0;
-						cubeIdx |= field[1] < isoVal ? (1 << 1) : 0;
-						cubeIdx |= field[2] < isoVal ? (1 << 2) : 0;
-						cubeIdx |= field[3] < isoVal ? (1 << 3) : 0;
-						cubeIdx |= field[4] < isoVal ? (1 << 4) : 0;
-						cubeIdx |= field[5] < isoVal ? (1 << 5) : 0;
-						cubeIdx |= field[6] < isoVal ? (1 << 6) : 0;
-						cubeIdx |= field[7] < isoVal ? (1 << 7) : 0;
-						return cubeIdx;
-					};
-
-					static constexpr auto InvalidVIdx = std::numeric_limits<size_t>::max();
-					auto vertDistSqrEps = std::min(std::min(voxSz.x(), voxSz.y()), voxSz.z()) * .2f;
-					vertDistSqrEps *= vertDistSqrEps;
-					std::vector<std::array<size_t, 12>> vox2VertIndices;
-					{
-						std::array<size_t, 12> arr;
-						arr.fill(std::numeric_limits<size_t>::max());
-						vox2VertIndices.assign(volDimYxX * volDim[0], arr);
-					}
-					auto searchVertIndex = [&](
-						uint32_t voxX, uint32_t voxY, uint32_t voxZ,
-						const osg::Vec3& vert) -> size_t {
-							auto searchVertIndexInVox = [&](
-								uint32_t voxX, uint32_t voxY, uint32_t voxZ) -> size_t {
-									for (auto vIdx :
-										vox2VertIndices[vox2Flat(voxX, voxY, voxZ)]) {
-										if (vIdx == InvalidVIdx) continue;
-
-										auto dlt = vert - (*verts)[vIdx];
-										if (dlt * dlt <= vertDistSqrEps)
-											return vIdx;
-									}
-									return InvalidVIdx;
-							};
-
-							// 从范围[(x-1, y-1, z-1), (x,y,z)]的体素所持顶点中，搜寻已经存在的顶点
-							for (int8_t dz = -1; dz < 1; ++dz) {
-								if (voxZ < 1) continue;
-
-								auto newVoxZ = voxZ + dz;
-								for (int8_t dy = -1; dy < 1; ++dy) {
-									if (voxY < 1) continue;
-
-									auto newVoxY = voxY + dy;
-									for (int8_t dx = -1; dx < 1; ++dx) {
-										if (voxX < 1) continue;
-										if (dx == 0 && dy == 0 && dz == 0) continue;
-
-										auto newVoxX = voxX + dx;
-										auto vIdx = searchVertIndexInVox(newVoxX, newVoxY, newVoxZ);
-										if (vIdx != InvalidVIdx)
-											return vIdx;
-									}
-								}
-							}
-
-							return InvalidVIdx;
-					};
-
-					std::vector<uint8_t> vertAdjFaceNum;
-					verts->clear();
-					norms->clear();
-					vertIndices.clear();
-					edges.clear();
-					for (size_t i = 0; i < volDat->size(); ++i) {
-						uint32_t z = i / volDimYxX;
-						uint32_t y = (i - z * volDimYxX) / volDim[0];
-						uint32_t x = i - z * volDimYxX - y * volDim[0];
-
-						std::array<osg::Vec3, 8> v;
-						{
-							osg::Vec3f p(x * voxSz.x(), y * voxSz.y(), z * voxSz.z());
-							v[0] = p;
-							v[1] = p + osg::Vec3(voxSz.x(), 0.f, 0.f);
-							v[2] = p + osg::Vec3(voxSz.x(), voxSz.y(), 0.f);
-							v[3] = p + osg::Vec3(0.f, voxSz.y(), 0.f);
-							v[4] = p + osg::Vec3(0.f, 0.f, voxSz.z());
-							v[5] = p + osg::Vec3(voxSz.x(), 0.f, voxSz.z());
-							v[6] = p + osg::Vec3(voxSz.x(), voxSz.y(), voxSz.z());
-							v[7] = p + osg::Vec3(0.f, voxSz.y(), voxSz.z());
-						}
-						auto field = cmptField(x, y, z);
-						auto cubeIdx = cmptCubeIdx(field);
-
-						std::array<osg::Vec3, 12> vertList;
-						auto vertInterp = [&](const osg::Vec3& p0, const osg::Vec3& p1, float f0,
-							float f1) -> osg::Vec3 {
-								auto t = f1 - f0;
-								t = t == 0.f ? 0.f : (isoVal - f0) / t;
-								auto dlt = p1 - p0;
-								return osg::Vec3(p0.x() + t * dlt.x(), p0.y() + t * dlt.y(),
-									p0.z() + t * dlt.z());
 						};
-						vertList[0] = vertInterp(v[0], v[1], field[0], field[1]);
-						vertList[1] = vertInterp(v[1], v[2], field[1], field[2]);
-						vertList[2] = vertInterp(v[2], v[3], field[2], field[3]);
-						vertList[3] = vertInterp(v[3], v[0], field[3], field[0]);
-
-						vertList[4] = vertInterp(v[4], v[5], field[4], field[5]);
-						vertList[5] = vertInterp(v[5], v[6], field[5], field[6]);
-						vertList[6] = vertInterp(v[6], v[7], field[6], field[7]);
-						vertList[7] = vertInterp(v[7], v[4], field[7], field[4]);
-
-						vertList[8] = vertInterp(v[0], v[4], field[0], field[4]);
-						vertList[9] = vertInterp(v[1], v[5], field[1], field[5]);
-						vertList[10] = vertInterp(v[2], v[6], field[2], field[6]);
-						vertList[11] = vertInterp(v[3], v[7], field[3], field[7]);
-
-						std::array<size_t, 12> vertIdxList;
-						for (uint8_t i = 0; i < vertIdxList.size(); ++i)
-							vertIdxList[i] = searchVertIndex(x, y, z, vertList[i]);
-
-						auto addVert = [&](const osg::Vec3& vert, uint8_t edge) -> size_t {
-							auto vIdx = verts->size();
-
-							verts->push_back(vert);
-							norms->push_back(osg::Vec3(0.f, 0.f, 0.f));
-
-							vertIndices.emplace_back(vIdx);
-							vertAdjFaceNum.emplace_back(1);
-							vertIdxList[edge] = vIdx;
-
-							return vIdx;
-						};
-						auto addEdges = [&](std::array<size_t, 3> faceVertIndices) {
-							std::sort(faceVertIndices.begin(), faceVertIndices.end());
-							std::array<size_t, 2> edge = { faceVertIndices[0], faceVertIndices[1] };
-							edges.emplace(edge);
-							edge[1] = faceVertIndices[2];
-							edges.emplace(edge);
-							edge[0] = faceVertIndices[1];
-							edges.emplace(edge);
-						};
-						for (uint32_t i = 0; i < VertNumTable[cubeIdx]; i += 3) {
-							std::array<size_t, 3> faceVertIndices;
-							for (uint8_t j = 0; j < 3; ++j) {
-								auto edge = TriangleTable[cubeIdx][i + j];
-								faceVertIndices[j] = vertIdxList[edge];
-								if (faceVertIndices[j] != InvalidVIdx)
-									vertIndices.emplace_back(faceVertIndices[j]);
-								else
-									faceVertIndices[j] = addVert(vertList[edge], edge);
-							}
-
-							addEdges(faceVertIndices);
-
-							auto e0 = (*verts)[faceVertIndices[1]] - (*verts)[faceVertIndices[0]];
-							auto e1 = (*verts)[faceVertIndices[2]] - (*verts)[faceVertIndices[0]];
-							auto faceNorm = e0 ^ e1;
-							faceNorm.normalize();
-
-							for (uint8_t j = 0; j < 3; ++j) {
-								auto edge = TriangleTable[cubeIdx][i + j];
-								auto vIdx = vertIdxList[edge];
-								(*norms)[vIdx] += faceNorm;
-								++vertAdjFaceNum[vIdx];
-							}
-						}
-						vox2VertIndices[i] = vertIdxList; // 更新体素到顶点索引的映射
-					}
-
-					auto vec3ToSphere = [&](const osg::Vec3& v3)
-						-> std::tuple<osg::Vec3, osg::Matrix> {
+					auto vec3ToSphere = [&](const osg::Vec3& v3) -> osg::Vec3 {
 						float dlt = maxLongtitute - minLongtitute;
 						float x = volStartFromLonZero == 0 ? v3.x() :
 							v3.x() < .5f ? v3.x() + .5f : v3.x() - .5f;
@@ -475,45 +290,196 @@ namespace SciVis
 						dlt = maxHeight - minHeight;
 						float h = minHeight + v3.z() * dlt;
 
-						osg::Vec3 pos;
-						pos.z() = h * sinf(lat);
+						osg::Vec3 ret;
+						ret.z() = h * sinf(lat);
 						h = h * cosf(lat);
-						pos.y() = h * sinf(lon);
-						pos.x() = h * cosf(lon);
+						ret.y() = h * sinf(lon);
+						ret.x() = h * cosf(lon);
 
-						osg::Matrix rotMat;
-						auto dir = pos;
-						dir.normalize();
-						rotMat(2, 0) = dir.x();
-						rotMat(2, 1) = dir.y();
-						rotMat(2, 2) = dir.z();
-						rotMat(2, 3) = 0.f;
-						auto tmp = osg::Vec3(0.f, 0.f, 1.f);
-						tmp = tmp ^ dir;
-						rotMat(0, 0) = tmp.x();
-						rotMat(0, 1) = tmp.y();
-						rotMat(0, 2) = tmp.z();
-						rotMat(0, 3) = 0.f;
-						tmp = dir ^ tmp;
-						rotMat(1, 0) = tmp.x();
-						rotMat(1, 1) = tmp.y();
-						rotMat(1, 2) = tmp.z();
-						rotMat(1, 3) = 0.f;
+						return ret;
+						};
 
-						rotMat(3, 0) = rotMat(3, 1) = rotMat(3, 2) = 0.f;
-						rotMat(3, 3) = 1.f;
+					auto lonExt = maxLongtitute - minLongtitute;
+					auto latExt = maxLatitute - minLatitute;
+					auto hExt = maxHeight - minHeight;
 
-						return std::make_tuple(pos, rotMat);
+					struct HashEdge {
+						size_t operator()(const std::array<int, 3>& edgeID) const {
+							size_t hash = edgeID[0];
+							hash = (hash << 32) | edgeID[1];
+							hash = (hash << 2) | edgeID[2];
+							return std::hash<size_t>()(hash);
+						};
 					};
-					for (size_t i = 0; i < verts->size(); ++i) {
-						auto& vert = (*verts)[i];
-						auto tup = vec3ToSphere(vert);
-						vert = std::get<0>(tup);
+					std::array<std::unordered_map<std::array<int, 3>, GLuint, HashEdge>, 2> edge2vertIDs;
 
-						auto& norm = (*norms)[i];
-						norm /= vertAdjFaceNum[i];
-						norm = norm * std::get<1>(tup);
+					vertIndices.clear();
+					verts->clear();
+					norms->clear();
+					edges.clear();
+					osg::Vec3i startPos;
+					for (startPos.z() = 0; startPos.z() < volDim[2] - 1; ++startPos.z()) {
+						if (startPos.z() != 0) {
+							edge2vertIDs[0] = std::move(edge2vertIDs[1]);
+							edge2vertIDs[1].clear(); // hash map only stores vertices of 2 consecutive heights
+						}
+
+						for (startPos.y() = 0; startPos.y() < volDim[1] - 1; ++startPos.y())
+							for (startPos.x() = 0; startPos.x() < volDim[0] - 1; ++startPos.x()) {
+								// Voxels in CCW order form a grid
+								// +-----------------+
+								// |       3 <--- 2  |
+								// |       |     /|\ |
+								// |      \|/     |  |
+								// |       0 ---> 1  |
+								// |      /          |
+								// |  7 <--- 6       |
+								// |  | /   /|\      |
+								// | \|/_    |       |
+								// |  4 ---> 5       |
+								// +-----------------+
+								uint8_t cornerState = 0;
+								std::array<float, 8> scalars;
+								for (int i = 0; i < 8; ++i) {
+									scalars[i] = sample(startPos);
+									if (scalars[i] >= isoVal)
+										cornerState |= 1 << i;
+
+									startPos.x() += i == 0 || i == 4 ? 1 : i == 2 || i == 6 ? -1 : 0;
+									startPos.y() += i == 1 || i == 5 ? 1 : i == 3 || i == 7 ? -1 : 0;
+									startPos.z() += i == 3 ? 1 : i == 7 ? -1 : 0;
+								}
+								std::array<float, 12> omegas = {
+									scalars[0] / (scalars[1] + scalars[0]),
+									scalars[1] / (scalars[2] + scalars[1]),
+									scalars[3] / (scalars[3] + scalars[2]),
+									scalars[0] / (scalars[0] + scalars[3]),
+									scalars[4] / (scalars[5] + scalars[4]),
+									scalars[5] / (scalars[6] + scalars[5]),
+									scalars[7] / (scalars[7] + scalars[6]),
+									scalars[4] / (scalars[4] + scalars[7]),
+									scalars[0] / (scalars[0] + scalars[4]),
+									scalars[1] / (scalars[1] + scalars[5]),
+									scalars[2] / (scalars[2] + scalars[6]),
+									scalars[3] / (scalars[3] + scalars[7])
+								};
+
+								// Edge indexed by Start Voxel Position
+								// +----------+
+								// | /*\  *|  |
+								// |  |  /    |
+								// | e1 e2    |
+								// |  * e0 *> |
+								// +----------+
+								// *:   startPos
+								// *>:  startPos + (1,0,0)
+								// /*\: startPos + (0,1,0)
+								// *|:  startPos + (0,0,1)
+								// ID(e0) = (startPos.xy, 00)
+								// ID(e1) = (startPos.xy, 01)
+								// ID(e2) = (startPos.xy, 10)
+								for (uint32_t i = 0; i < VertNumTable[cornerState]; i += 3) {
+									for (int32_t ii = 0; ii < 3; ++ii) {
+										auto ei = TriangleTable[cornerState][i + ii];
+										std::array<int, 3> edgeID = {
+											startPos.x() + (ei == 1 || ei == 5 || ei == 9 || ei == 10 ? 1 : 0),
+											startPos.y() + (ei == 2 || ei == 6 || ei == 10 || ei == 11 ? 1 : 0),
+											ei >= 8 ? 2
+											: ei == 1 || ei == 3 || ei == 5 || ei == 7 ? 1
+											: 0
+										};
+										auto edge2vertIDIdx = ei >= 4 && ei < 8 ? 1 : 0;
+										auto itr = edge2vertIDs[edge2vertIDIdx].find(edgeID);
+										if (itr != edge2vertIDs[edge2vertIDIdx].end()) {
+											vertIndices.emplace_back(itr->second);
+											continue;
+										}
+
+										osg::Vec3 pos(
+											startPos.x() + (ei == 0 || ei == 2 || ei == 4 || ei == 6
+												? omegas[ei]
+												: ei == 1 || ei == 5 || ei == 9 || ei == 10 ? 1.f
+												: 0.f),
+											startPos.y() + (ei == 1 || ei == 3 || ei == 5 || ei == 7
+												? omegas[ei]
+												: ei == 2 || ei == 6 || ei == 10 || ei == 11 ? 1.f
+												: 0.f),
+											startPos.z() + (ei >= 8
+												? omegas[ei]
+												: ei >= 4 ? 1.f
+												: 0.f));
+										pos.x() /= volDim[0];
+										pos.y() /= volDim[1];
+										pos.z() /= volDim[2];
+										pos = vec3ToSphere(pos);
+
+										float scalar;
+										switch (ei) {
+										case 0:
+											scalar = omegas[0] * scalars[0] + (1.f - omegas[0]) * scalars[1];
+											break;
+										case 1:
+											scalar = omegas[1] * scalars[1] + (1.f - omegas[1]) * scalars[2];
+											break;
+										case 2:
+											scalar = omegas[2] * scalars[3] + (1.f - omegas[2]) * scalars[2];
+											break;
+										case 3:
+											scalar = omegas[3] * scalars[0] + (1.f - omegas[3]) * scalars[3];
+											break;
+										case 4:
+											scalar = omegas[4] * scalars[4] + (1.f - omegas[4]) * scalars[5];
+											break;
+										case 5:
+											scalar = omegas[5] * scalars[5] + (1.f - omegas[5]) * scalars[6];
+											break;
+										case 6:
+											scalar = omegas[6] * scalars[7] + (1.f - omegas[6]) * scalars[6];
+											break;
+										case 7:
+											scalar = omegas[7] * scalars[4] + (1.f - omegas[7]) * scalars[7];
+											break;
+										default:
+											scalar = omegas[ei] * scalars[ei - 8] + (1.f - omegas[ei]) * scalars[ei - 4];
+										}
+
+										vertIndices.emplace_back(verts->size());
+										verts->push_back(pos);
+										norms->push_back(osg::Vec3(0.f, 0.f, 0.f));
+										edge2vertIDs[edge2vertIDIdx].emplace(edgeID, vertIndices.back());
+									}
+
+									std::array<GLuint, 3> triVertIdxs = {
+										vertIndices[vertIndices.size() - 3],
+										vertIndices[vertIndices.size() - 2],
+										vertIndices[vertIndices.size() - 1]
+									};
+									osg::Vec3 norm;
+									{
+										auto e0 = (*verts)[triVertIdxs[1]] -
+											(*verts)[triVertIdxs[0]];
+										auto e1 = (*verts)[triVertIdxs[2]] -
+											(*verts)[triVertIdxs[0]];
+										norm = e1 ^ e0;
+										norm.normalize();
+									}
+
+									(*norms)[triVertIdxs[0]] += norm;
+									(*norms)[triVertIdxs[1]] += norm;
+									(*norms)[triVertIdxs[2]] += norm;
+
+									edges.emplace(std::array<GLuint, 2>{triVertIdxs[0], triVertIdxs[1]});
+									edges.emplace(std::array<GLuint, 2>{triVertIdxs[1], triVertIdxs[0]});
+									edges.emplace(std::array<GLuint, 2>{triVertIdxs[1], triVertIdxs[2]});
+									edges.emplace(std::array<GLuint, 2>{triVertIdxs[2], triVertIdxs[1]});
+									edges.emplace(std::array<GLuint, 2>{triVertIdxs[2], triVertIdxs[0]});
+									edges.emplace(std::array<GLuint, 2>{triVertIdxs[0], triVertIdxs[2]});
+								}
+							}
 					}
+
+					for (auto& norm : *norms)
+						norm.normalize();
 
 					updateGeometry();
 				}
@@ -534,9 +500,12 @@ namespace SciVis
 					return deg * osg::PI / 180.f;
 				};
 				void updateGeometry() {
+					if (vertIndices.empty())
+						return;
+
 					auto laplacianSmooth = [&]() {
-						for (size_t vIdx = 0; vIdx < verts->size(); ++vIdx) {
-							auto itr = edges.lower_bound(std::array<size_t, 2>{vIdx, 0});
+						for (GLuint vIdx = 0; vIdx < verts->size(); ++vIdx) {
+							auto itr = edges.lower_bound(std::array<GLuint, 2>{vIdx, 0});
 							assert(itr != edges.end());
 
 							auto& smoothedVert = (*smoothedVerts)[vIdx];
@@ -551,25 +520,24 @@ namespace SciVis
 							smoothedVert /= lnkNum;
 							smoothedNorm /= lnkNum;
 						}
-					};
+						};
 					auto curvatureSmooth = [&]() {
-						for (size_t vIdx = 0; vIdx < verts->size(); ++vIdx) {
-							auto itr = edges.lower_bound(std::array<size_t, 2>{vIdx, 0});
+						for (GLuint vIdx = 0; vIdx < verts->size(); ++vIdx) {
+							auto itr = edges.lower_bound(std::array<GLuint, 2>{vIdx, 0});
 							assert(itr != edges.end());
 
 							auto& smoothedVert = (*smoothedVerts)[vIdx];
-							auto invNorm = -(*smoothedNorms)[vIdx];
+							auto& norm = (*smoothedNorms)[vIdx];
 							auto projLen = 0.f;
 							while (itr != edges.end() && (*itr)[0] == vIdx) {
 								auto dlt = (*verts)[(*itr)[1]] - smoothedVert;
-								projLen = std::max(
-									std::abs(dlt * invNorm), projLen);
+								projLen = dlt * norm;
 								++itr;
 							}
 
-							smoothedVert = smoothedVert + invNorm * projLen;
+							smoothedVert = smoothedVert + norm * projLen;
 						}
-					};
+						};
 
 					if (meshSmoothingType != MeshSmoothingType::None)
 						switch (meshSmoothingType) {
