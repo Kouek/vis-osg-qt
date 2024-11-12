@@ -113,7 +113,6 @@ namespace SciVis
 			{
 			private:
 				std::array<uint32_t, 3> volDim;
-				osg::Vec3 voxSz;
 				float isoVal;
 				float minLongtitute, maxLongtitute;
 				float minLatitute, maxLatitute;
@@ -155,8 +154,6 @@ namespace SciVis
 					maxHeight = MaxHeight;
 					volStartFromLonZero = false;
 					useSmoothedVol = false;
-
-					voxSz = osg::Vec3(1.f / volDim[0], 1.f / volDim[1], 1.f / volDim[2]);
 
 					verts = new osg::Vec3Array;
 					norms = new osg::Vec3Array;
